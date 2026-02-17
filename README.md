@@ -190,9 +190,9 @@ from llm_io_guard.scanners.llm_judge import LlmJudgeScanner
 
 PromptGuardScanner(threshold_block=0.9, threshold_flag=0.7)
 PiiDetector(threshold_block=0.9, threshold_flag=0.7)
-LlmJudgeScanner(threshold_block=0.8, threshold_flag=0.5, model="claude-haiku-4-5-20251001")
+LlmJudgeScanner(threshold_block=0.8, threshold_flag=0.5, model="claude-haiku-4-5")
 ```
-
+  
 ### Environment Variables
 
 | Variable | Description | Default |
