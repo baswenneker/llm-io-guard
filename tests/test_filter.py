@@ -45,7 +45,7 @@ class TestInputFilter:
         """Safe content returns PASS."""
         f = InputFilter()
         f.add(PassScanner(tier=2))
-        result = await f.filter("safe content")
+        result = await f.afilter("safe content")
         assert isinstance(result, FilterResult)
         assert result.is_safe
 
@@ -53,16 +53,16 @@ class TestInputFilter:
         """Blocked content returns BLOCK."""
         f = InputFilter()
         f.add(BlockScanner(tier=2))
-        result = await f.filter("bad content")
+        result = await f.afilter("bad content")
         assert isinstance(result, FilterResult)
         assert result.action == Action.BLOCK
 
     async def test_auto_initialize(self):
-        """Filter auto-initializes on first filter() call."""
+        """Filter auto-initializes on first afilter() call."""
         f = InputFilter()
         f.add(PassScanner(tier=2))
         assert f._initialized is False
-        await f.filter("test")
+        await f.afilter("test")
         assert f._initialized is True
 
     async def test_tier_ordering(self):
@@ -70,7 +70,7 @@ class TestInputFilter:
         f = InputFilter()
         f.add(SanitizingScanner())  # Tier 1
         f.add(PassScanner(tier=2))
-        result = await f.filter("<script>alert('xss')</script> hello")
+        result = await f.afilter("<script>alert('xss')</script> hello")
         assert isinstance(result, FilterResult)
         assert result.sanitized_content is not None
         assert "<script>" not in result.sanitized_content
@@ -80,20 +80,20 @@ class TestInputFilter:
         received_metadata = {}
 
         class MetadataCapture(PassScanner):
-            async def scan(self, content, metadata=None):
+            async def ascan(self, content, metadata=None):
                 received_metadata.update(metadata or {})
-                return await super().scan(content, metadata)
+                return await super().ascan(content, metadata)
 
         f = InputFilter()
         f.add(MetadataCapture(tier=2))
-        await f.filter("test")
+        await f.afilter("test")
         assert received_metadata.get("direction") == "input"
 
     async def test_max_content_length(self):
         """Content exceeding max_content_length is blocked."""
         f = InputFilter(max_content_length=10)
         f.add(PassScanner(tier=2))
-        result = await f.filter("this content is too long for the filter")
+        result = await f.afilter("this content is too long for the filter")
         assert isinstance(result, FilterResult)
         assert result.action == Action.BLOCK
 
@@ -101,7 +101,7 @@ class TestInputFilter:
         """Scanner that raises an exception produces BLOCK result (fail-closed)."""
         f = InputFilter()
         f.add(ErrorScanner(tier=2))
-        result = await f.filter("test")
+        result = await f.afilter("test")
         assert isinstance(result, FilterResult)
         assert result.action == Action.BLOCK
         assert "fail-closed" in result.scan_results[0].description
@@ -110,7 +110,7 @@ class TestInputFilter:
         """Tier 1 scanner error produces BLOCK (fail-closed), not FLAG."""
         f = InputFilter()
         f.add(ErrorScanner(tier=1))
-        result = await f.filter("test")
+        result = await f.afilter("test")
         assert isinstance(result, FilterResult)
         assert result.action == Action.BLOCK
         assert "fail-closed" in result.scan_results[0].description
@@ -120,7 +120,7 @@ class TestInputFilter:
         f = InputFilter()
         f.add(FlagScanner(tier=2))  # FLAG triggers Tier 3 for InputFilter
         f.add(ErrorScanner(tier=3))
-        result = await f.filter("test")
+        result = await f.afilter("test")
         assert isinstance(result, FilterResult)
         assert result.action == Action.BLOCK
         block_results = [r for r in result.scan_results if r.action == Action.BLOCK]
@@ -142,13 +142,13 @@ class TestInputFilter:
             def tier(self) -> int:
                 return 2
 
-            async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+            async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
                 raise asyncio.CancelledError()
 
         f = InputFilter()
         f.add(CancelScanner())
         with pytest.raises(asyncio.CancelledError):
-            await f.filter("test")
+            await f.afilter("test")
 
 
 # ---------------------------------------------------------------------------
@@ -164,15 +164,15 @@ class TestTier3ConditionalLogic:
         tier3_ran = False
 
         class TrackingPassScanner(PassScanner):
-            async def scan(self, content, metadata=None):
+            async def ascan(self, content, metadata=None):
                 nonlocal tier3_ran
                 tier3_ran = True
-                return await super().scan(content, metadata)
+                return await super().ascan(content, metadata)
 
         f = InputFilter()
         f.add(FlagScanner(tier=2))  # Tier 2 produces FLAG
         f.add(TrackingPassScanner(tier=3))  # Tier 3 should run
-        await f.filter("test")
+        await f.afilter("test")
         assert tier3_ran is True
 
     async def test_tier3_skipped_on_pass_low_risk(self):
@@ -180,15 +180,15 @@ class TestTier3ConditionalLogic:
         tier3_ran = False
 
         class TrackingPassScanner(PassScanner):
-            async def scan(self, content, metadata=None):
+            async def ascan(self, content, metadata=None):
                 nonlocal tier3_ran
                 tier3_ran = True
-                return await super().scan(content, metadata)
+                return await super().ascan(content, metadata)
 
         f = InputFilter()
         f.add(PassScanner(tier=2))  # Tier 2 passes
         f.add(TrackingPassScanner(tier=3))
-        await f.filter("test", metadata={"source_risk": "low"})
+        await f.afilter("test", metadata={"source_risk": "low"})
         assert tier3_ran is False
 
     async def test_tier3_runs_on_high_risk(self):
@@ -196,15 +196,15 @@ class TestTier3ConditionalLogic:
         tier3_ran = False
 
         class TrackingPassScanner(PassScanner):
-            async def scan(self, content, metadata=None):
+            async def ascan(self, content, metadata=None):
                 nonlocal tier3_ran
                 tier3_ran = True
-                return await super().scan(content, metadata)
+                return await super().ascan(content, metadata)
 
         f = InputFilter()
         f.add(PassScanner(tier=2))  # Tier 2 passes
         f.add(TrackingPassScanner(tier=3))
-        await f.filter("test", metadata={"source_risk": "high"})
+        await f.afilter("test", metadata={"source_risk": "high"})
         assert tier3_ran is True
 
     async def test_tier3_runs_on_unknown_risk(self):
@@ -212,15 +212,15 @@ class TestTier3ConditionalLogic:
         tier3_ran = False
 
         class TrackingPassScanner(PassScanner):
-            async def scan(self, content, metadata=None):
+            async def ascan(self, content, metadata=None):
                 nonlocal tier3_ran
                 tier3_ran = True
-                return await super().scan(content, metadata)
+                return await super().ascan(content, metadata)
 
         f = InputFilter()
         f.add(PassScanner(tier=2))
         f.add(TrackingPassScanner(tier=3))
-        await f.filter("test", metadata={"source_risk": "unknown"})
+        await f.afilter("test", metadata={"source_risk": "unknown"})
         assert tier3_ran is True
 
     async def test_output_filter_always_runs_tier3(self):
@@ -228,15 +228,15 @@ class TestTier3ConditionalLogic:
         tier3_ran = False
 
         class TrackingPassScanner(PassScanner):
-            async def scan(self, content, metadata=None):
+            async def ascan(self, content, metadata=None):
                 nonlocal tier3_ran
                 tier3_ran = True
-                return await super().scan(content, metadata)
+                return await super().ascan(content, metadata)
 
         f = OutputFilter()
         f.add(PassScanner(tier=2))
         f.add(TrackingPassScanner(tier=3))
-        await f.filter("safe content")
+        await f.afilter("safe content")
         assert tier3_ran is True
 
 
@@ -267,20 +267,20 @@ class TestOutputFilter:
         received_metadata = {}
 
         class MetadataCapture(PassScanner):
-            async def scan(self, content, metadata=None):
+            async def ascan(self, content, metadata=None):
                 received_metadata.update(metadata or {})
-                return await super().scan(content, metadata)
+                return await super().ascan(content, metadata)
 
         f = OutputFilter()
         f.add(MetadataCapture(tier=2))
-        await f.filter("test")
+        await f.afilter("test")
         assert received_metadata.get("direction") == "output"
 
     async def test_filter_safe_content(self):
         """Safe content returns PASS."""
         f = OutputFilter()
         f.add(PassScanner(tier=2))
-        result = await f.filter("safe output")
+        result = await f.afilter("safe output")
         assert isinstance(result, FilterResult)
         assert result.is_safe
 
@@ -297,14 +297,14 @@ class TestOnBlockModes:
         """on_block='result' always returns FilterResult."""
         f = InputFilter(on_block="result")
         f.add(PassScanner(tier=2))
-        result = await f.filter("safe")
+        result = await f.afilter("safe")
         assert isinstance(result, FilterResult)
 
     async def test_result_mode_returns_filter_result_on_block(self):
         """on_block='result' returns FilterResult even when blocked."""
         f = InputFilter(on_block="result")
         f.add(BlockScanner(tier=2))
-        result = await f.filter("bad")
+        result = await f.afilter("bad")
         assert isinstance(result, FilterResult)
         assert result.action == Action.BLOCK
 
@@ -312,7 +312,7 @@ class TestOnBlockModes:
         """on_block='raise' returns str on safe content."""
         f = InputFilter(on_block="raise")
         f.add(PassScanner(tier=2))
-        result = await f.filter("safe content")
+        result = await f.afilter("safe content")
         assert isinstance(result, str)
         assert result == "safe content"
 
@@ -321,14 +321,14 @@ class TestOnBlockModes:
         f = InputFilter(on_block="raise")
         f.add(BlockScanner(tier=2))
         with pytest.raises(ContentBlocked) as exc_info:
-            await f.filter("bad content")
+            await f.afilter("bad content")
         assert exc_info.value.result.action == Action.BLOCK
 
     async def test_none_mode_returns_str_on_pass(self):
         """on_block='none' returns str on safe content."""
         f = InputFilter(on_block="none")
         f.add(PassScanner(tier=2))
-        result = await f.filter("safe content")
+        result = await f.afilter("safe content")
         assert isinstance(result, str)
         assert result == "safe content"
 
@@ -336,7 +336,7 @@ class TestOnBlockModes:
         """on_block='none' returns None on blocked content."""
         f = InputFilter(on_block="none")
         f.add(BlockScanner(tier=2))
-        result = await f.filter("bad content")
+        result = await f.afilter("bad content")
         assert result is None
 
     def test_invalid_on_block_raises(self):

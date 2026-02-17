@@ -69,7 +69,7 @@ class UrlScanner(Scanner):
     def tier(self) -> int:
         return 2
 
-    async def initialize(self) -> None:
+    async def ainitialize(self) -> None:
         api_key = os.environ.get("GOOGLE_SAFE_BROWSING_API_KEY")
         if api_key:
             from pysafebrowsing import SafeBrowsing
@@ -81,7 +81,7 @@ class UrlScanner(Scanner):
                 "safe_browsing_no_api_key", msg="URL scanning will use local checks only"
             )
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         content_type = (metadata or {}).get("content_type", "text/plain")
         urls = extract_urls(content, content_type)
 

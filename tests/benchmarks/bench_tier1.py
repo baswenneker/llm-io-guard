@@ -19,7 +19,7 @@ class TestTier1Benchmarks:
         content = "Normal text with some content " * 100
         start = time.perf_counter()
         for _ in range(100):
-            await scanner.scan(content)
+            await scanner.ascan(content)
         elapsed = (time.perf_counter() - start) / 100
         assert elapsed < 0.005, f"InvisibleTextScanner too slow: {elapsed * 1000:.2f}ms"
 
@@ -29,7 +29,7 @@ class TestTier1Benchmarks:
         content = "<p>Hello</p><div>World</div>" * 50
         start = time.perf_counter()
         for _ in range(100):
-            await scanner.scan(content)
+            await scanner.ascan(content)
         elapsed = (time.perf_counter() - start) / 100
         assert elapsed < 0.005, f"HtmlSanitizer too slow: {elapsed * 1000:.2f}ms"
 
@@ -39,7 +39,7 @@ class TestTier1Benchmarks:
         content = "Normal text content without XML"
         start = time.perf_counter()
         for _ in range(100):
-            await scanner.scan(content)
+            await scanner.ascan(content)
         elapsed = (time.perf_counter() - start) / 100
         assert elapsed < 0.005, f"XmlSafeParser too slow: {elapsed * 1000:.2f}ms"
 
@@ -50,7 +50,7 @@ class TestTier1Benchmarks:
         start = time.perf_counter()
         for _ in range(100):
             for scanner in scanners:
-                await scanner.scan(content)
+                await scanner.ascan(content)
         elapsed = (time.perf_counter() - start) / 100
         assert elapsed < 0.005, f"Combined Tier 1 too slow: {elapsed * 1000:.2f}ms"
 
@@ -60,7 +60,7 @@ class TestTier1Benchmarks:
         content = "Normal" + "\u200b" * 500 + "text" + "\u200c" * 500
         start = time.perf_counter()
         for _ in range(100):
-            await scanner.scan(content)
+            await scanner.ascan(content)
         elapsed = (time.perf_counter() - start) / 100
         assert elapsed < 0.005, f"InvisibleTextScanner (heavy) too slow: {elapsed * 1000:.2f}ms"
 
@@ -70,6 +70,6 @@ class TestTier1Benchmarks:
         content = "<div>" + "<p>Content paragraph</p>" * 100 + "</div>"
         start = time.perf_counter()
         for _ in range(50):
-            await scanner.scan(content, metadata={"content_type": "text/html"})
+            await scanner.ascan(content, metadata={"content_type": "text/html"})
         elapsed = (time.perf_counter() - start) / 50
         assert elapsed < 0.050, f"HtmlSanitizer (large) too slow: {elapsed * 1000:.2f}ms"

@@ -6,7 +6,7 @@ from llm_io_guard.scanners.xml_safe_parser import XmlSafeParser
 
 async def test_non_xml_passes():
     scanner = XmlSafeParser()
-    result = await scanner.scan("Just some plain text.")
+    result = await scanner.ascan("Just some plain text.")
     assert result.action == Action.PASS
     assert result.description == "Content is not XML, skipping"
     assert result.details["sanitized_content"] == "Just some plain text."
@@ -15,7 +15,7 @@ async def test_non_xml_passes():
 async def test_valid_xml_passes():
     scanner = XmlSafeParser()
     xml = '<?xml version="1.0"?><root><item>Hello</item></root>'
-    result = await scanner.scan(xml)
+    result = await scanner.ascan(xml)
     assert result.action == Action.PASS
     assert "safely" in result.description
     assert result.details["sanitized_content"] == xml
@@ -30,7 +30,7 @@ async def test_xxe_blocked():
         "]>"
         "<root>&xxe;</root>"
     )
-    result = await scanner.scan(xxe_xml)
+    result = await scanner.ascan(xxe_xml)
     assert result.action == Action.BLOCK
     assert result.confidence == 1.0
     assert "Malicious XML" in result.description
@@ -48,7 +48,7 @@ async def test_billion_laughs_blocked():
         "]>"
         "<root>&lol4;</root>"
     )
-    result = await scanner.scan(billion_laughs)
+    result = await scanner.ascan(billion_laughs)
     assert result.action == Action.BLOCK
     assert result.confidence == 1.0
 
@@ -56,7 +56,7 @@ async def test_billion_laughs_blocked():
 async def test_malformed_xml_passes():
     scanner = XmlSafeParser()
     bad_xml = '<?xml version="1.0"?><root><unclosed>'
-    result = await scanner.scan(bad_xml)
+    result = await scanner.ascan(bad_xml)
     assert result.action == Action.PASS
     assert "Malformed" in result.description
     assert result.details["sanitized_content"] == bad_xml
@@ -64,7 +64,7 @@ async def test_malformed_xml_passes():
 
 async def test_xml_content_type_triggers_parsing():
     scanner = XmlSafeParser()
-    result = await scanner.scan("<root>data</root>", metadata={"content_type": "text/xml"})
+    result = await scanner.ascan("<root>data</root>", metadata={"content_type": "text/xml"})
     assert result.action == Action.PASS
     assert "safely" in result.description
 

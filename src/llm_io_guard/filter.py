@@ -12,6 +12,7 @@ import structlog
 from .exceptions import ContentBlocked
 from .models import Action, FilterResult, ScanResult
 from .scanner import Scanner  # noqa: TC001 - used at runtime in dict construction
+from .utils.sync import run_sync
 
 logger = structlog.get_logger()
 
@@ -63,14 +64,20 @@ class BaseFilter(ABC):
         logger.info("scanner_added", scanner=scanner.name, tier=scanner.tier)
         return self
 
-    async def initialize(self) -> None:
-        """Initialize all registered scanners."""
+    async def ainitialize(self) -> None:
+        """Initialize all registered scanners (async)."""
         for tier_scanners in self._scanners.values():
-            await asyncio.gather(*(s.initialize() for s in tier_scanners))
+            await asyncio.gather(*(s.ainitialize() for s in tier_scanners))
         self._initialized = True
 
-    async def filter(self, content: str, metadata: dict | None = None) -> FilterResult | str | None:
-        """Run content through the filter pipeline.
+    def initialize(self) -> None:
+        """Initialize all registered scanners (sync)."""
+        run_sync(self.ainitialize())
+
+    async def afilter(
+        self, content: str, metadata: dict | None = None
+    ) -> FilterResult | str | None:
+        """Run content through the filter pipeline (async).
 
         Returns based on on_block mode:
           - "result": always returns FilterResult
@@ -78,7 +85,7 @@ class BaseFilter(ABC):
           - "none": returns str on pass, None on block
         """
         if not self._initialized:
-            await self.initialize()
+            await self.ainitialize()
 
         result = await self._run_pipeline(content, metadata)
 
@@ -92,6 +99,16 @@ class BaseFilter(ABC):
             if result.action == Action.BLOCK:
                 return None
             return result.text
+
+    def filter(self, content: str, metadata: dict | None = None) -> FilterResult | str | None:
+        """Run content through the filter pipeline (sync).
+
+        Returns based on on_block mode:
+          - "result": always returns FilterResult
+          - "raise": returns str on pass, raises ContentBlocked on block
+          - "none": returns str on pass, None on block
+        """
+        return run_sync(self.afilter(content, metadata))
 
     async def _run_pipeline(self, content: str, metadata: dict | None = None) -> FilterResult:
         """Execute the tiered scanning pipeline."""
@@ -120,7 +137,7 @@ class BaseFilter(ABC):
             if tier == 1:
                 for scanner in tier_scanners:
                     try:
-                        scan_result = await scanner.scan(current_content, scan_metadata)
+                        scan_result = await scanner.ascan(current_content, scan_metadata)
                     except Exception as e:
                         logger.error("scanner_error", scanner=scanner.name, tier=tier, error=str(e))
                         scan_result = ScanResult(
@@ -146,7 +163,7 @@ class BaseFilter(ABC):
             # Tier 2: parallel execution
             elif tier == 2:
                 tier_results_raw = await asyncio.gather(
-                    *(s.scan(current_content, scan_metadata) for s in tier_scanners),
+                    *(s.ascan(current_content, scan_metadata) for s in tier_scanners),
                     return_exceptions=True,
                 )
                 tier_results = []
@@ -191,7 +208,7 @@ class BaseFilter(ABC):
 
                 for scanner in tier_scanners:
                     try:
-                        scan_result = await scanner.scan(current_content, scan_metadata)
+                        scan_result = await scanner.ascan(current_content, scan_metadata)
                     except Exception as e:
                         logger.error("scanner_error", scanner=scanner.name, tier=tier, error=str(e))
                         scan_result = ScanResult(

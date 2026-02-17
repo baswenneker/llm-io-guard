@@ -14,7 +14,7 @@ class TestZeroWidthInjection:
         """Zero-width spaces should be stripped from content."""
         scanner = InvisibleTextScanner()
         content = "Hello\u200bWorld"  # Zero-width space between words
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         sanitized = result.details.get("sanitized_content", "")
         assert "\u200b" not in sanitized
         assert "HelloWorld" in sanitized
@@ -23,7 +23,7 @@ class TestZeroWidthInjection:
         """Zero-width joiners should be stripped."""
         scanner = InvisibleTextScanner()
         content = "test\u200dcontent"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         sanitized = result.details.get("sanitized_content", "")
         assert "\u200d" not in sanitized
 
@@ -31,7 +31,7 @@ class TestZeroWidthInjection:
         """Zero-width non-joiners should be stripped."""
         scanner = InvisibleTextScanner()
         content = "test\u200ccontent"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         sanitized = result.details.get("sanitized_content", "")
         assert "\u200c" not in sanitized
 
@@ -39,7 +39,7 @@ class TestZeroWidthInjection:
         """Many zero-width characters should trigger FLAG."""
         scanner = InvisibleTextScanner()
         content = "Hello" + "\u200b" * 50 + "World"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         assert result.action == Action.FLAG
         assert result.details["invisible_char_count"] == 50
 
@@ -52,7 +52,7 @@ class TestRtlOverride:
         """RTL override characters should be stripped."""
         scanner = InvisibleTextScanner()
         content = "Normal \u202eevil hidden text\u202c visible"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         sanitized = result.details.get("sanitized_content", "")
         assert "\u202e" not in sanitized
         assert "\u202c" not in sanitized
@@ -61,7 +61,7 @@ class TestRtlOverride:
         """LTR override characters should be stripped."""
         scanner = InvisibleTextScanner()
         content = "text \u202dhidden\u202c more"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         sanitized = result.details.get("sanitized_content", "")
         assert "\u202d" not in sanitized
 
@@ -69,7 +69,7 @@ class TestRtlOverride:
         """Directional isolate characters should be stripped."""
         scanner = InvisibleTextScanner()
         content = "test \u2066hidden\u2069 content"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         sanitized = result.details.get("sanitized_content", "")
         assert "\u2066" not in sanitized
         assert "\u2069" not in sanitized
@@ -85,7 +85,7 @@ class TestTagCharacterHiding:
         # Build "HELLO" using tag characters (U+E0048 = tag H, etc.)
         tag_hello = "\U000e0048\U000e0045\U000e004c\U000e004c\U000e004f"
         content = f"Normal text{tag_hello}more text"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         sanitized = result.details.get("sanitized_content", "")
         assert "\U000e0048" not in sanitized
 
@@ -93,7 +93,7 @@ class TestTagCharacterHiding:
         """Language tag character U+E0001 should be stripped."""
         scanner = InvisibleTextScanner()
         content = "text\U000e0001more"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         sanitized = result.details.get("sanitized_content", "")
         assert "\U000e0001" not in sanitized
 
@@ -106,7 +106,7 @@ class TestBomSpam:
         """Single BOM character should be stripped."""
         scanner = InvisibleTextScanner()
         content = "\ufeffHello World"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         sanitized = result.details.get("sanitized_content", "")
         assert "\ufeff" not in sanitized
         assert "Hello World" in sanitized
@@ -115,7 +115,7 @@ class TestBomSpam:
         """Many BOM characters should trigger FLAG."""
         scanner = InvisibleTextScanner()
         content = "\ufeff" * 20 + "Hidden message"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         assert result.action == Action.FLAG
         assert result.details["invisible_char_count"] >= 20
 
@@ -135,7 +135,7 @@ class TestManyInvisibleCharsFlagged:
             + "\ufeff" * 5  # BOMs
         )
         content = f"Normal{invisible}text"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         assert result.action == Action.FLAG
         assert result.details["invisible_char_count"] > 10
 
@@ -143,7 +143,7 @@ class TestManyInvisibleCharsFlagged:
         """C0 control characters (except tab/newline/CR) should be stripped."""
         scanner = InvisibleTextScanner()
         content = "Hello\x01\x02\x03World"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         sanitized = result.details.get("sanitized_content", "")
         assert "\x01" not in sanitized
         assert "\x02" not in sanitized
@@ -153,7 +153,7 @@ class TestManyInvisibleCharsFlagged:
         """C1 control characters should be stripped."""
         scanner = InvisibleTextScanner()
         content = "Hello\x80\x81\x82World"
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         sanitized = result.details.get("sanitized_content", "")
         assert "\x80" not in sanitized
 
@@ -161,6 +161,6 @@ class TestManyInvisibleCharsFlagged:
         """Normal text without invisible characters should pass cleanly."""
         scanner = InvisibleTextScanner()
         content = "This is perfectly normal text with no hidden characters."
-        result = await scanner.scan(content)
+        result = await scanner.ascan(content)
         assert result.action == Action.PASS
         assert result.details.get("sanitized_content") == content

@@ -79,7 +79,7 @@ class PromptGuardScanner(Scanner):
         """Only supports input direction."""
         return frozenset({"input"})
 
-    async def initialize(self) -> None:
+    async def ainitialize(self) -> None:
         """Load model and tokenizer (singleton pattern)."""
         async with self._init_lock:
             if self._model is not None:
@@ -102,7 +102,7 @@ class PromptGuardScanner(Scanner):
 
             logger.info("prompt_guard_loaded", model=model_name)
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         """Scan content for prompt injection and jailbreak attempts."""
         if self._model is None or self._tokenizer is None:
             raise RuntimeError("PromptGuardScanner not initialized. Call initialize() first.")

@@ -34,7 +34,7 @@ class HtmlSanitizer(Scanner):
         """Only supports input direction."""
         return frozenset({"input"})
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         content_type = (metadata or {}).get("content_type", "text/plain")
 
         # Only sanitize HTML content

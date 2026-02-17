@@ -25,8 +25,12 @@ class Scanner(ABC):
         ...
 
     @abstractmethod
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
-        """Scan content and return a result."""
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
+        """Scan content and return a result (async)."""
+        ...
+
+    def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+        """Scan content and return a result (sync). Calls ascan() internally."""
         ...
 
     @property
@@ -34,8 +38,11 @@ class Scanner(ABC):
         """Directions this scanner supports. Default: both."""
         return frozenset({"input", "output"})
 
-    async def initialize(self) -> None:
+    async def ainitialize(self) -> None:
         """Optional async initialization (model loading, etc.)."""
+
+    def initialize(self) -> None:
+        """Optional sync initialization. Calls ainitialize() internally."""
 ```
 
 ### Members
@@ -44,9 +51,11 @@ class Scanner(ABC):
 |--------|----------|-------------|
 | `name` | Yes | Unique snake_case identifier (e.g. `"keyword_blocklist"`). Used in scan results and logs. |
 | `tier` | Yes | Which tier this scanner runs in: `1`, `2`, or `3`. See [tier selection guide](#tier-selection-guide) below. |
-| `scan()` | Yes | Async method that receives content and optional metadata, returns a `ScanResult`. Should never raise -- see [error handling](#error-handling). |
+| `ascan()` | Yes | Async method that receives content and optional metadata, returns a `ScanResult`. Should never raise -- see [error handling](#error-handling). |
+| `scan()` | No | Sync wrapper provided automatically. Calls `ascan()` via `asyncio.run()`. |
 | `supported_directions` | No | `frozenset` of `"input"`, `"output"`, or both. Defaults to both. The filter rejects scanners that don't match its direction. |
-| `initialize()` | No | Async setup hook called once before the first scan. Use for loading ML models, warming caches, etc. |
+| `ainitialize()` | No | Async setup hook called once before the first scan. Use for loading ML models, warming caches, etc. |
+| `initialize()` | No | Sync wrapper provided automatically. Calls `ainitialize()` via `asyncio.run()`. |
 
 ## Worked example: KeywordBlocklistScanner
 
@@ -79,7 +88,7 @@ class KeywordBlocklistScanner(Scanner):
     def supported_directions(self) -> frozenset[str]:
         return frozenset({"input", "output"})
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         matches = self._pattern.findall(content)
         if matches:
             return ScanResult(
@@ -105,7 +114,7 @@ from llm_io_guard import InputFilter
 input_filter = InputFilter()
 input_filter.add(KeywordBlocklistScanner(keywords=["DROP TABLE", "rm -rf"]))
 
-result = await input_filter.filter("Please run: DROP TABLE users;")
+result = input_filter.filter("Please run: DROP TABLE users;")
 print(result.action)       # Action.BLOCK
 print(result.blocked_by)   # [ScanResult(scanner_name='keyword_blocklist', ...)]
 ```
@@ -119,6 +128,8 @@ input_filter = (
     .add(KeywordBlocklistScanner(keywords=["DROP TABLE"]))
 )
 ```
+
+> **Async usage:** Use `await input_filter.afilter(...)` instead of `input_filter.filter(...)` in async contexts.
 
 ## Content mutation (Tier 1 only)
 
@@ -136,7 +147,7 @@ class CensorScanner(Scanner):
     def tier(self) -> int:
         return 1  # Must be Tier 1 for content mutation
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         censored = content.replace("badword", "***")
         changed = censored != content
         return ScanResult(
@@ -163,24 +174,24 @@ from llm_io_guard.models import Action
 class TestKeywordBlocklistScanner:
     async def test_blocks_banned_keyword(self):
         scanner = KeywordBlocklistScanner(keywords=["DROP TABLE"])
-        result = await scanner.scan("Please run: DROP TABLE users;")
+        result = await scanner.ascan("Please run: DROP TABLE users;")
         assert result.action == Action.BLOCK
         assert result.confidence == 1.0
         assert "DROP TABLE" in result.details["matched_keywords"]
 
     async def test_passes_clean_content(self):
         scanner = KeywordBlocklistScanner(keywords=["DROP TABLE"])
-        result = await scanner.scan("SELECT * FROM users WHERE id = 1")
+        result = await scanner.ascan("SELECT * FROM users WHERE id = 1")
         assert result.action == Action.PASS
 
     async def test_case_insensitive_by_default(self):
         scanner = KeywordBlocklistScanner(keywords=["drop table"])
-        result = await scanner.scan("DROP TABLE users")
+        result = await scanner.ascan("DROP TABLE users")
         assert result.action == Action.BLOCK
 
     async def test_case_sensitive_mode(self):
         scanner = KeywordBlocklistScanner(keywords=["drop table"], case_sensitive=True)
-        result = await scanner.scan("DROP TABLE users")
+        result = await scanner.ascan("DROP TABLE users")
         assert result.action == Action.PASS
 ```
 
@@ -200,7 +211,7 @@ The pipeline uses a **fail-closed** design: if your scanner raises an exception,
 However, you should still handle expected errors within your scanner to provide better diagnostics:
 
 ```python
-async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
     try:
         matches = self._check(content)
     except SomeExpectedError as e:

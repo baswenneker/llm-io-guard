@@ -44,9 +44,9 @@ Tier 3 (< 500ms)→ Conditional LLM judge
                    LlmJudgeScanner (Claude Haiku)
 ```
 
-Usage:
+Usage (sync):
 ```python
-from llm_io_guard import InputFilter, OutputFilter, ContentBlocked
+from llm_io_guard import InputFilter, OutputFilter
 from llm_io_guard.scanners.invisible_text import InvisibleTextScanner
 from llm_io_guard.scanners.prompt_guard import PromptGuardScanner
 from llm_io_guard.scanners.pii_detector import PiiDetector
@@ -55,13 +55,18 @@ input_filter = InputFilter()
 input_filter.add(InvisibleTextScanner())
 input_filter.add(PromptGuardScanner(threshold_block=0.95))
 
-result = await input_filter.filter("untrusted content")
+result = input_filter.filter("untrusted content")
 if result.is_safe:
-    llm_response = await call_llm(result.text)
+    llm_response = call_llm(result.text)
 
 output_filter = OutputFilter()
 output_filter.add(PiiDetector())
-result = await output_filter.filter(llm_response)
+result = output_filter.filter(llm_response)
+```
+
+All methods have async counterparts with an `a` prefix (`afilter`, `ascan`, `ainitialize`):
+```python
+result = await input_filter.afilter("untrusted content")
 ```
 
 Any BLOCK result short-circuits the pipeline immediately. Tier 2 scanners run concurrently. InputFilter runs Tier 3 only if content was flagged or source risk is high/unknown. OutputFilter always runs Tier 3 if scanners are registered.
@@ -73,7 +78,7 @@ Scanners declare `supported_directions` (`"input"`, `"output"`, or both). Filter
 | Module | Purpose |
 |--------|---------|
 | `src/llm_io_guard/filter.py` | `InputFilter` / `OutputFilter` — builder-pattern filter API with tiered pipeline execution |
-| `src/llm_io_guard/scanner.py` | `Scanner` ABC — all scanners implement `name`, `tier`, `supported_directions`, `scan()`, optionally `initialize()` |
+| `src/llm_io_guard/scanner.py` | `Scanner` ABC — all scanners implement `name`, `tier`, `supported_directions`, `ascan()`, optionally `ainitialize()`. Sync wrappers `scan()` / `initialize()` are provided. |
 | `src/llm_io_guard/models.py` | `Action` (PASS/FLAG/BLOCK), `ScanResult`, `FilterResult` dataclasses |
 | `src/llm_io_guard/exceptions.py` | `ContentBlocked` exception for `on_block="raise"` mode |
 | `src/llm_io_guard/actions.py` | `ActionRequest`, `ActionCategory` — agent action validation with confirmation callbacks |
@@ -82,14 +87,14 @@ Scanners declare `supported_directions` (`"input"`, `"output"`, or both). Filter
 
 ### Adding a scanner
 
-1. Extend `Scanner` ABC, set `name`, `tier`, `supported_directions`, implement `scan()` returning `ScanResult`
+1. Extend `Scanner` ABC, set `name`, `tier`, `supported_directions`, implement `ascan()` returning `ScanResult`
 2. Add to a filter with `filter.add(MyScanner())`
 3. Add tests in `tests/scanners/`
 
 ## Code Conventions
 
 - **Type hints**: Modern Python 3.12 syntax — `dict[str, int]`, `str | None`, `list[T]`. Use `collections.abc` for `Callable`, `Awaitable`.
-- **Async**: All scanner `scan()` methods and filter methods are async. Tests use `asyncio_mode = "auto"`.
+- **Sync + Async**: All public methods have both sync and async variants. Async methods use the `a` prefix (`afilter`, `ascan`, `ainitialize`, `avalidate_action`, `aacquire`). Sync methods (`filter`, `scan`, `initialize`, `validate_action`, `acquire`) call `asyncio.run()` internally. Scanners implement `ascan()` (abstract) and get `scan()` for free. Tests use `asyncio_mode = "auto"` and call the async variants.
 - **Imports**: stdlib → third-party → local (relative with `..`). Enforced by ruff `I` rules.
 - **Line length**: 100 chars (ruff). `E501` is ignored.
 - **Docstrings**: Google-style. 90% coverage enforced by `interrogate`.

@@ -29,7 +29,7 @@ class TestPipelineBenchmarks:
         content = "This is a normal email with regular text content."
         start = time.perf_counter()
         for _ in range(100):
-            await f.filter(content)
+            await f.afilter(content)
         elapsed = (time.perf_counter() - start) / 100
         assert elapsed < 0.010, f"Pipeline (plain text) too slow: {elapsed * 1000:.2f}ms"
 
@@ -45,7 +45,7 @@ class TestPipelineBenchmarks:
         )
         start = time.perf_counter()
         for _ in range(50):
-            await f.filter(content, metadata={"content_type": "text/html"})
+            await f.afilter(content, metadata={"content_type": "text/html"})
         elapsed = (time.perf_counter() - start) / 50
         assert elapsed < 0.020, f"Pipeline (HTML) too slow: {elapsed * 1000:.2f}ms"
 
@@ -61,7 +61,7 @@ class TestPipelineBenchmarks:
         }
         start = time.perf_counter()
         for _ in range(100):
-            await f.filter(content, metadata=metadata)
+            await f.afilter(content, metadata=metadata)
         elapsed = (time.perf_counter() - start) / 100
         assert elapsed < 0.010, f"Pipeline (email) too slow: {elapsed * 1000:.2f}ms"
 
@@ -72,7 +72,7 @@ class TestPipelineBenchmarks:
         count = 200
         start = time.perf_counter()
         for _ in range(count):
-            await f.filter(content)
+            await f.afilter(content)
         total = time.perf_counter() - start
         throughput = count / total
         assert throughput > 100, f"Pipeline throughput too low: {throughput:.0f} scans/sec"

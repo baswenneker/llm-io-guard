@@ -42,14 +42,14 @@ class TestDutchContentPassesTier1:
         """Normal Dutch text should pass InvisibleTextScanner."""
         scanner = InvisibleTextScanner()
         for text in DUTCH_TEXTS:
-            result = await scanner.scan(text)
+            result = await scanner.ascan(text)
             assert result.action == Action.PASS, f"Dutch text incorrectly flagged: {text[:50]}"
 
     async def test_dutch_text_passes_html_sanitizer(self):
         """Normal Dutch text should pass HtmlSanitizer as plain text."""
         scanner = HtmlSanitizer()
         for text in DUTCH_TEXTS:
-            result = await scanner.scan(text)
+            result = await scanner.ascan(text)
             assert result.action == Action.PASS, f"Dutch text incorrectly flagged: {text[:50]}"
 
     async def test_dutch_with_special_chars(self):
@@ -61,7 +61,7 @@ class TestDutchContentPassesTier1:
             "Cafe, creme brulee, naive, resume.",
         ]
         for text in special_dutch:
-            result = await scanner.scan(text)
+            result = await scanner.ascan(text)
             assert result.action == Action.PASS
 
 
@@ -73,14 +73,14 @@ class TestEnglishContentPassesTier1:
         """Normal English text should pass InvisibleTextScanner."""
         scanner = InvisibleTextScanner()
         for text in ENGLISH_TEXTS:
-            result = await scanner.scan(text)
+            result = await scanner.ascan(text)
             assert result.action == Action.PASS, f"English text incorrectly flagged: {text[:50]}"
 
     async def test_english_text_passes_html_sanitizer(self):
         """Normal English text should pass HtmlSanitizer."""
         scanner = HtmlSanitizer()
         for text in ENGLISH_TEXTS:
-            result = await scanner.scan(text)
+            result = await scanner.ascan(text)
             assert result.action == Action.PASS, f"English text incorrectly flagged: {text[:50]}"
 
 
@@ -92,14 +92,14 @@ class TestMixedLanguageContentPassesTier1:
         """Mixed language text should pass InvisibleTextScanner."""
         scanner = InvisibleTextScanner()
         for text in MIXED_TEXTS:
-            result = await scanner.scan(text)
+            result = await scanner.ascan(text)
             assert result.action == Action.PASS, f"Mixed text incorrectly flagged: {text[:50]}"
 
     async def test_mixed_text_passes_html_sanitizer(self):
         """Mixed language text should pass HtmlSanitizer."""
         scanner = HtmlSanitizer()
         for text in MIXED_TEXTS:
-            result = await scanner.scan(text)
+            result = await scanner.ascan(text)
             assert result.action == Action.PASS, f"Mixed text incorrectly flagged: {text[:50]}"
 
 
@@ -116,7 +116,7 @@ class TestUnicodeLanguageCharacters:
             "Task complete \u2705",
         ]
         for text in texts:
-            result = await scanner.scan(text)
+            result = await scanner.ascan(text)
             assert result.action == Action.PASS
 
     async def test_accented_characters_pass(self):
@@ -128,5 +128,5 @@ class TestUnicodeLanguageCharacters:
             "Cliches, naive, vis-a-vis",
         ]
         for text in texts:
-            result = await scanner.scan(text)
+            result = await scanner.ascan(text)
             assert result.action == Action.PASS

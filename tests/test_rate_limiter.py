@@ -70,7 +70,7 @@ class TestAcquire:
     async def test_acquire_within_limits(self):
         """Test atomic acquire within limits."""
         limiter = RateLimiter(max_requests_per_minute=10, max_cost_per_day_usd=1.0)
-        result = await limiter.acquire(estimated_cost=0.1)
+        result = await limiter.aacquire(estimated_cost=0.1)
         assert result is True
 
     @pytest.mark.asyncio
@@ -78,15 +78,15 @@ class TestAcquire:
         """Test atomic acquire when rate limit exceeded."""
         limiter = RateLimiter(max_requests_per_minute=1, max_cost_per_day_usd=100.0)
         # First request succeeds
-        result1 = await limiter.acquire(estimated_cost=0.0)
+        result1 = await limiter.aacquire(estimated_cost=0.0)
         assert result1 is True
         # Second request exceeds rate limit
-        result2 = await limiter.acquire(estimated_cost=0.0)
+        result2 = await limiter.aacquire(estimated_cost=0.0)
         assert result2 is False
 
     @pytest.mark.asyncio
     async def test_acquire_exceeds_cost_limit(self):
         """Test atomic acquire when cost limit exceeded."""
         limiter = RateLimiter(max_requests_per_minute=100, max_cost_per_day_usd=0.01)
-        result = await limiter.acquire(estimated_cost=0.02)
+        result = await limiter.aacquire(estimated_cost=0.02)
         assert result is False

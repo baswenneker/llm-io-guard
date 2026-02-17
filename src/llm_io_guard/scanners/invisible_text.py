@@ -42,7 +42,7 @@ class InvisibleTextScanner(Scanner):
         """Only supports input direction."""
         return frozenset({"input"})
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         invisible_matches = INVISIBLE_CHARS_PATTERN.findall(content)
         variation_matches = VARIATION_SELECTORS.findall(content)
 

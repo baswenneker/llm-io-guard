@@ -18,7 +18,7 @@ class PassScanner(Scanner):
     def __init__(self, tier: int = 2) -> None:
         self._tier = tier
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         return ScanResult(
             scanner_name=self.name,
             action=Action.PASS,
@@ -41,7 +41,7 @@ class BlockScanner(Scanner):
     def __init__(self, tier: int = 2) -> None:
         self._tier = tier
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         return ScanResult(
             scanner_name=self.name,
             action=Action.BLOCK,
@@ -64,7 +64,7 @@ class FlagScanner(Scanner):
     def __init__(self, tier: int = 2) -> None:
         self._tier = tier
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         return ScanResult(
             scanner_name=self.name,
             action=Action.FLAG,
@@ -74,7 +74,7 @@ class FlagScanner(Scanner):
 
 
 class ErrorScanner(Scanner):
-    """Scanner that raises an exception on scan() for testing error handling."""
+    """Scanner that raises an exception on ascan() for testing error handling."""
 
     def __init__(self, tier: int = 2, error: Exception | None = None):
         self._tier = tier
@@ -88,7 +88,7 @@ class ErrorScanner(Scanner):
     def tier(self) -> int:
         return self._tier
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         raise self._error
 
 
@@ -103,7 +103,7 @@ class SanitizingScanner(Scanner):
     def tier(self) -> int:
         return 1
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         sanitized = content.replace("<script>", "").replace("</script>", "")
         return ScanResult(
             scanner_name=self.name,

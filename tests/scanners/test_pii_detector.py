@@ -95,7 +95,7 @@ class TestPiiDetector:
 
     async def test_not_initialized_raises(self):
         with pytest.raises(RuntimeError, match="not initialized"):
-            await self.detector.scan("hello")
+            await self.detector.ascan("hello")
 
     @patch("llm_io_guard.scanners.pii_detector.AnonymizerEngine")
     @patch("llm_io_guard.scanners.pii_detector.AnalyzerEngine")
@@ -107,8 +107,8 @@ class TestPiiDetector:
         mock_analyzer_cls.return_value = mock_analyzer
         mock_anon_cls.return_value = MagicMock()
 
-        await self.detector.initialize()
-        result = await self.detector.scan("Hello world, no PII here.")
+        await self.detector.ainitialize()
+        result = await self.detector.ascan("Hello world, no PII here.")
 
         assert result.action == Action.PASS
         assert result.confidence == 0.0
@@ -127,8 +127,8 @@ class TestPiiDetector:
         mock_analyzer_cls.return_value = mock_analyzer
         mock_anon_cls.return_value = MagicMock()
 
-        await self.detector.initialize()
-        result = await self.detector.scan("sk-abc123def456ghi789jkl012mno345p")
+        await self.detector.ainitialize()
+        result = await self.detector.ascan("sk-abc123def456ghi789jkl012mno345p")
 
         assert result.action == Action.BLOCK
         assert result.confidence == 0.95
@@ -148,8 +148,8 @@ class TestPiiDetector:
         mock_analyzer_cls.return_value = mock_analyzer
         mock_anon_cls.return_value = MagicMock()
 
-        await self.detector.initialize()
-        result = await self.detector.scan("Jan de Vries is here", metadata={"direction": "input"})
+        await self.detector.ainitialize()
+        result = await self.detector.ascan("Jan de Vries is here", metadata={"direction": "input"})
 
         assert result.action == Action.FLAG
         assert result.details["redacted"] is False
@@ -173,8 +173,8 @@ class TestPiiDetector:
         mock_anonymizer.anonymize.return_value = mock_anon_result
         mock_anon_cls.return_value = mock_anonymizer
 
-        await self.detector.initialize()
-        result = await self.detector.scan("Jan de Vries is here", metadata={"direction": "output"})
+        await self.detector.ainitialize()
+        result = await self.detector.ascan("Jan de Vries is here", metadata={"direction": "output"})
 
         assert result.action == Action.FLAG
         assert result.details["redacted"] is True
@@ -194,8 +194,8 @@ class TestPiiDetector:
         mock_analyzer_cls.return_value = mock_analyzer
         mock_anon_cls.return_value = MagicMock()
 
-        await self.detector.initialize()
-        result = await self.detector.scan("Maybe a name here")
+        await self.detector.ainitialize()
+        result = await self.detector.ascan("Maybe a name here")
 
         assert result.action == Action.PASS
         assert result.confidence == 0.3
@@ -214,8 +214,8 @@ class TestPiiDetector:
         mock_analyzer_cls.return_value = mock_analyzer
         mock_anon_cls.return_value = MagicMock()
 
-        await self.detector.initialize()
-        result = await self.detector.scan("some content")
+        await self.detector.ainitialize()
+        result = await self.detector.ascan("some content")
 
         assert result.action == Action.FLAG
         assert "PII detection error" in result.description

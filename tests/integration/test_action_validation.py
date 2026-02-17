@@ -7,7 +7,7 @@ from llm_io_guard.actions import (
     REQUIRES_CONFIRMATION,
     ActionCategory,
     ActionRequest,
-    validate_action,
+    avalidate_action,
 )
 
 
@@ -88,7 +88,7 @@ class TestValidateActionAutoAllowed:
             tool_name="read_data",
             description="Read records",
         )
-        result = await validate_action(action)
+        result = await avalidate_action(action)
         assert result is True
 
     async def test_notify_auto_allowed(self):
@@ -98,7 +98,7 @@ class TestValidateActionAutoAllowed:
             tool_name="notify",
             description="Send notification",
         )
-        result = await validate_action(action)
+        result = await avalidate_action(action)
         assert result is True
 
 
@@ -112,7 +112,7 @@ class TestValidateActionWithConfirmation:
             tool_name="delete_file",
             description="Delete important file",
         )
-        result = await validate_action(action, confirm_callback=None)
+        result = await avalidate_action(action, confirm_callback=None)
         assert result is False
 
     async def test_delete_approved_with_callback(self):
@@ -123,7 +123,7 @@ class TestValidateActionWithConfirmation:
             tool_name="delete_record",
             description="Delete record #456",
         )
-        result = await validate_action(action, confirm_callback=callback)
+        result = await avalidate_action(action, confirm_callback=callback)
         assert result is True
         callback.assert_called_once()
 
@@ -135,7 +135,7 @@ class TestValidateActionWithConfirmation:
             tool_name="delete_record",
             description="Delete record #789",
         )
-        result = await validate_action(action, confirm_callback=callback)
+        result = await avalidate_action(action, confirm_callback=callback)
         assert result is False
         callback.assert_called_once()
 
@@ -147,7 +147,7 @@ class TestValidateActionWithConfirmation:
             tool_name="send_email",
             description="Send email to client",
         )
-        result = await validate_action(action, confirm_callback=callback)
+        result = await avalidate_action(action, confirm_callback=callback)
         assert result is True
 
     async def test_execute_blocked_without_callback(self):
@@ -157,7 +157,7 @@ class TestValidateActionWithConfirmation:
             tool_name="run_command",
             description="Execute system command",
         )
-        result = await validate_action(action, confirm_callback=None)
+        result = await avalidate_action(action, confirm_callback=None)
         assert result is False
 
     async def test_callback_receives_description(self):
@@ -173,7 +173,7 @@ class TestValidateActionWithConfirmation:
             tool_name="send_email",
             description="Send quarterly report",
         )
-        await validate_action(action, confirm_callback=capture_callback)
+        await avalidate_action(action, confirm_callback=capture_callback)
         assert len(received_messages) == 1
         assert "Send quarterly report" in received_messages[0]
         assert "send_email" in received_messages[0]
@@ -189,7 +189,7 @@ class TestValidateActionMiddleTier:
             tool_name="create_ticket",
             description="Create support ticket",
         )
-        result = await validate_action(action)
+        result = await avalidate_action(action)
         assert result is False
 
     async def test_modify_blocked_without_callback(self):
@@ -199,7 +199,7 @@ class TestValidateActionMiddleTier:
             tool_name="update_status",
             description="Update ticket status",
         )
-        result = await validate_action(action)
+        result = await avalidate_action(action)
         assert result is False
 
     async def test_create_approved_with_callback(self):
@@ -210,7 +210,7 @@ class TestValidateActionMiddleTier:
             tool_name="create_ticket",
             description="Create support ticket",
         )
-        result = await validate_action(action, confirm_callback=callback)
+        result = await avalidate_action(action, confirm_callback=callback)
         assert result is True
         callback.assert_called_once()
 
@@ -222,7 +222,7 @@ class TestValidateActionMiddleTier:
             tool_name="update_status",
             description="Update ticket status",
         )
-        result = await validate_action(action, confirm_callback=callback)
+        result = await avalidate_action(action, confirm_callback=callback)
         assert result is True
         callback.assert_called_once()
 

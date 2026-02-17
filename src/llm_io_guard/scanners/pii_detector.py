@@ -191,7 +191,7 @@ class PiiDetector(Scanner):
         """Only supports output direction."""
         return frozenset({"output"})
 
-    async def initialize(self) -> None:
+    async def ainitialize(self) -> None:
         """Initialize Presidio with Dutch spaCy model and custom recognizers."""
         async with self._init_lock:
             if self._analyzer is not None:
@@ -220,7 +220,7 @@ class PiiDetector(Scanner):
 
             logger.info("pii_detector_initialized")
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         """Scan content for PII and secrets."""
         if self._analyzer is None or self._anonymizer is None:
             raise RuntimeError("PiiDetector not initialized. Call initialize() first.")

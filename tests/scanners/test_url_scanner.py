@@ -47,7 +47,7 @@ class TestUrlScanner:
         return UrlScanner()
 
     async def test_no_urls_passes(self, scanner):
-        result = await scanner.scan("Hello, no URLs here.")
+        result = await scanner.ascan("Hello, no URLs here.")
         assert result.action == Action.PASS
         assert result.confidence == 0.0
 
@@ -58,7 +58,7 @@ class TestUrlScanner:
         }
         scanner._safe_browsing = mock_sb
 
-        result = await scanner.scan("Visit https://google.com for search.")
+        result = await scanner.ascan("Visit https://google.com for search.")
         assert result.action == Action.PASS
         assert result.details["urls_scanned"] >= 1
 
@@ -72,14 +72,14 @@ class TestUrlScanner:
         }
         scanner._safe_browsing = mock_sb
 
-        result = await scanner.scan("Go to https://evil-site.com now.")
+        result = await scanner.ascan("Go to https://evil-site.com now.")
         assert result.action == Action.BLOCK
         assert result.confidence == 0.99
         assert len(result.details["threats"]) >= 1
 
     async def test_homoglyph_detected(self, scanner):
         # Cyrillic 'а' (U+0430) looks like Latin 'a'
-        result = await scanner.scan("Visit https://\u0430pple.com today.")
+        result = await scanner.ascan("Visit https://\u0430pple.com today.")
         assert result.action == Action.FLAG
         assert result.confidence == 0.85
         threats = result.details["threats"]
@@ -87,11 +87,11 @@ class TestUrlScanner:
 
     async def test_no_api_key_local_only(self, scanner):
         with patch.dict("os.environ", {}, clear=True):
-            await scanner.initialize()
+            await scanner.ainitialize()
         assert scanner._safe_browsing is None
 
         # Homoglyph check should still work
-        result = await scanner.scan("Visit https://\u0430pple.com today.")
+        result = await scanner.ascan("Visit https://\u0430pple.com today.")
         assert result.action == Action.FLAG
 
     async def test_api_error_fallback(self, scanner):
@@ -99,7 +99,7 @@ class TestUrlScanner:
         mock_sb.lookup_urls.side_effect = RuntimeError("API timeout")
         scanner._safe_browsing = mock_sb
 
-        result = await scanner.scan("Visit https://example.com now.")
+        result = await scanner.ascan("Visit https://example.com now.")
         # Should not raise; falls back to local results
         assert result.action == Action.PASS
 
@@ -111,7 +111,7 @@ class TestUrlScanner:
         }
         scanner._safe_browsing = mock_sb
 
-        result = await scanner.scan("Visit https://safe.com and https://also-safe.com for info.")
+        result = await scanner.ascan("Visit https://safe.com and https://also-safe.com for info.")
         assert result.action == Action.PASS
         assert result.details["urls_scanned"] == 2
         mock_sb.lookup_urls.assert_called_once()

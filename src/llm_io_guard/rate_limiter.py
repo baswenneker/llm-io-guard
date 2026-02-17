@@ -1,6 +1,7 @@
 """Rate limiting for agent workflows."""
 
 import asyncio
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -19,7 +20,9 @@ class RateLimiter:
     _cost_reset_time: float = field(default_factory=time.time)
 
     def __post_init__(self) -> None:
-        self._lock = asyncio.Lock()
+        """Initialize locks for thread-safe and async-safe access."""
+        self._async_lock: asyncio.Lock | None = None
+        self._sync_lock = threading.Lock()
 
     def check_rate_limit(self) -> bool:
         """Check if we're within rate limits."""
@@ -40,9 +43,21 @@ class RateLimiter:
         self._request_times.append(time.time())
         self._daily_cost += cost
 
-    async def acquire(self, estimated_cost: float = 0.0) -> bool:
-        """Atomically check limits and record a request."""
-        async with self._lock:
+    async def aacquire(self, estimated_cost: float = 0.0) -> bool:
+        """Atomically check limits and record a request (async)."""
+        if self._async_lock is None:
+            self._async_lock = asyncio.Lock()
+        async with self._async_lock:
+            if not self.check_rate_limit():
+                return False
+            if not self.check_cost_limit(estimated_cost):
+                return False
+            self.record_request(estimated_cost)
+            return True
+
+    def acquire(self, estimated_cost: float = 0.0) -> bool:
+        """Atomically check limits and record a request (sync)."""
+        with self._sync_lock:
             if not self.check_rate_limit():
                 return False
             if not self.check_cost_limit(estimated_cost):

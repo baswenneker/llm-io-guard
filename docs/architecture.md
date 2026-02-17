@@ -87,7 +87,7 @@ Tier 2 scanners run **concurrently** via `asyncio.gather()` with `return_excepti
 
 ```python
 tier_results_raw = await asyncio.gather(
-    *(s.scan(current_content, scan_metadata) for s in tier_scanners),
+    *(s.ascan(current_content, scan_metadata) for s in tier_scanners),
     return_exceptions=True,
 )
 ```
@@ -150,7 +150,7 @@ For Tier 1 and 3 (sequential execution):
 
 ```python
 try:
-    scan_result = await scanner.scan(current_content, scan_metadata)
+    scan_result = await scanner.ascan(current_content, scan_metadata)
 except Exception as e:
     scan_result = ScanResult(
         scanner_name=scanner.name,

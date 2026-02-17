@@ -43,21 +43,21 @@ class TestPromptInjectionTier1:
     async def test_invisible_text_handles_injections(self, pattern):
         """InvisibleTextScanner should process injection strings without errors."""
         scanner = InvisibleTextScanner()
-        result = await scanner.scan(pattern)
+        result = await scanner.ascan(pattern)
         assert result.action in (Action.PASS, Action.FLAG, Action.BLOCK)
 
     @pytest.mark.parametrize("pattern", DUTCH_INJECTIONS)
     async def test_invisible_text_handles_dutch_injections(self, pattern):
         """InvisibleTextScanner should process Dutch injection strings without errors."""
         scanner = InvisibleTextScanner()
-        result = await scanner.scan(pattern)
+        result = await scanner.ascan(pattern)
         assert result.action in (Action.PASS, Action.FLAG, Action.BLOCK)
 
     @pytest.mark.parametrize("pattern", HTML_INJECTION_PATTERNS)
     async def test_html_sanitizer_strips_dangerous_html(self, pattern):
         """HtmlSanitizer should strip dangerous HTML tags from injections."""
         scanner = HtmlSanitizer()
-        result = await scanner.scan(pattern, metadata={"content_type": "text/html"})
+        result = await scanner.ascan(pattern, metadata={"content_type": "text/html"})
         sanitized = result.details.get("sanitized_content", "")
         assert "<script>" not in sanitized
         assert "<iframe>" not in sanitized
@@ -67,12 +67,12 @@ class TestPromptInjectionTier1:
         """HtmlSanitizer should flag content with excessive hidden elements."""
         scanner = HtmlSanitizer()
         hidden_heavy = '<div style="display:none">' + "A" * 1000 + "</div><p>visible</p>"
-        result = await scanner.scan(hidden_heavy, metadata={"content_type": "text/html"})
+        result = await scanner.ascan(hidden_heavy, metadata={"content_type": "text/html"})
         assert result.action in (Action.PASS, Action.FLAG)
 
     async def test_injection_with_invisible_chars(self):
         """Injection text hidden with zero-width characters should be detected."""
         scanner = InvisibleTextScanner()
         hidden_injection = "S\u200bY\u200bS\u200bT\u200bE\u200bM\u200b:\u200b " * 5
-        result = await scanner.scan(hidden_injection)
+        result = await scanner.ascan(hidden_injection)
         assert result.details.get("invisible_char_count", 0) > 0

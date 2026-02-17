@@ -19,7 +19,7 @@ class TestScannerABC:
             def tier(self) -> int:
                 return 1
 
-            async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+            async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
                 return ScanResult(
                     scanner_name="no_name",
                     action=Action.PASS,
@@ -36,7 +36,7 @@ class TestScannerABC:
             def name(self) -> str:
                 return "no_tier"
 
-            async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+            async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
                 return ScanResult(
                     scanner_name=self.name,
                     action=Action.PASS,
@@ -47,7 +47,7 @@ class TestScannerABC:
         with pytest.raises(TypeError):
             NoTier()  # type: ignore[abstract]
 
-    def test_must_implement_scan(self):
+    def test_must_implement_ascan(self):
         class NoScan(Scanner):
             @property
             def name(self) -> str:
@@ -70,7 +70,7 @@ class TestScannerABC:
             def tier(self) -> int:
                 return 2
 
-            async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+            async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
                 return ScanResult(
                     scanner_name=self.name,
                     action=Action.PASS,
@@ -82,7 +82,7 @@ class TestScannerABC:
         assert scanner.name == "concrete"
         assert scanner.tier == 2
 
-    async def test_concrete_scan(self):
+    async def test_concrete_ascan(self):
         class ConcreteScanner(Scanner):
             @property
             def name(self) -> str:
@@ -92,7 +92,7 @@ class TestScannerABC:
             def tier(self) -> int:
                 return 1
 
-            async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+            async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
                 return ScanResult(
                     scanner_name=self.name,
                     action=Action.PASS,
@@ -101,11 +101,11 @@ class TestScannerABC:
                 )
 
         scanner = ConcreteScanner()
-        result = await scanner.scan("test content")
+        result = await scanner.ascan("test content")
         assert result.action == Action.PASS
         assert result.scanner_name == "concrete"
 
-    async def test_initialize_noop(self):
+    async def test_ainitialize_noop(self):
         class ConcreteScanner(Scanner):
             @property
             def name(self) -> str:
@@ -115,7 +115,7 @@ class TestScannerABC:
             def tier(self) -> int:
                 return 1
 
-            async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+            async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
                 return ScanResult(
                     scanner_name=self.name,
                     action=Action.PASS,
@@ -125,7 +125,7 @@ class TestScannerABC:
 
         scanner = ConcreteScanner()
         # Should not raise
-        await scanner.initialize()
+        await scanner.ainitialize()
 
     def test_supported_directions_default(self):
         """Default supported_directions includes both input and output."""
@@ -139,7 +139,7 @@ class TestScannerABC:
             def tier(self) -> int:
                 return 1
 
-            async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+            async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
                 return ScanResult(
                     scanner_name=self.name,
                     action=Action.PASS,

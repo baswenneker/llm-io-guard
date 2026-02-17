@@ -2,7 +2,7 @@
 
 from unittest.mock import AsyncMock
 
-from llm_io_guard.actions import ActionCategory, ActionRequest, validate_action
+from llm_io_guard.actions import ActionCategory, ActionRequest, avalidate_action
 
 
 class TestActionRequestPostInit:
@@ -42,19 +42,19 @@ class TestAutoAllowedActions:
         action = ActionRequest(
             category=ActionCategory.READ, tool_name="read_file", description="Read a file"
         )
-        assert await validate_action(action) is True
+        assert await avalidate_action(action) is True
 
     async def test_notify_action_auto_allowed(self):
         action = ActionRequest(
             category=ActionCategory.NOTIFY, tool_name="notify", description="Send notification"
         )
-        assert await validate_action(action) is True
+        assert await avalidate_action(action) is True
 
     async def test_create_action_requires_confirmation(self):
         action = ActionRequest(
             category=ActionCategory.CREATE, tool_name="touch", description="Create a file"
         )
-        assert await validate_action(action) is False
+        assert await avalidate_action(action) is False
 
 
 class TestConfirmationRequired:
@@ -64,26 +64,26 @@ class TestConfirmationRequired:
         action = ActionRequest(
             category=ActionCategory.DELETE, tool_name="rm", description="Delete a file"
         )
-        assert await validate_action(action) is False
+        assert await avalidate_action(action) is False
 
     async def test_send_requires_confirmation(self):
         action = ActionRequest(
             category=ActionCategory.SEND, tool_name="email", description="Send an email"
         )
-        assert await validate_action(action) is False
+        assert await avalidate_action(action) is False
 
     async def test_execute_requires_confirmation(self):
         action = ActionRequest(
             category=ActionCategory.EXECUTE, tool_name="run", description="Run a command"
         )
-        assert await validate_action(action) is False
+        assert await avalidate_action(action) is False
 
     async def test_delete_confirmed(self):
         action = ActionRequest(
             category=ActionCategory.DELETE, tool_name="rm", description="Delete a file"
         )
         callback = AsyncMock(return_value=True)
-        assert await validate_action(action, confirm_callback=callback) is True
+        assert await avalidate_action(action, confirm_callback=callback) is True
         callback.assert_called_once()
 
     async def test_delete_rejected(self):
@@ -91,5 +91,5 @@ class TestConfirmationRequired:
             category=ActionCategory.DELETE, tool_name="rm", description="Delete a file"
         )
         callback = AsyncMock(return_value=False)
-        assert await validate_action(action, confirm_callback=callback) is False
+        assert await avalidate_action(action, confirm_callback=callback) is False
         callback.assert_called_once()

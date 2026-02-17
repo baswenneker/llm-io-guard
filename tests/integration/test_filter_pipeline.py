@@ -18,7 +18,7 @@ class TestInputFilterPipeline:
         f = InputFilter()
         f.add(SanitizingScanner())  # Tier 1 — removes <script> tags
         f.add(PassScanner(tier=2))
-        result = await f.filter("<script>alert('xss')</script> Hello world")
+        result = await f.afilter("<script>alert('xss')</script> Hello world")
 
         assert isinstance(result, FilterResult)
         assert result.is_safe
@@ -34,7 +34,7 @@ class TestInputFilterPipeline:
         f.add(FlagScanner(tier=2))  # Tier 2 flags → triggers Tier 3
         f.add(PassScanner(tier=3))  # Tier 3 passes
 
-        result = await f.filter("<script>bad</script> normal content")
+        result = await f.afilter("<script>bad</script> normal content")
 
         assert isinstance(result, FilterResult)
         # Final action is FLAG (from Tier 2), not BLOCK
@@ -49,15 +49,15 @@ class TestInputFilterPipeline:
         tier3_ran = False
 
         class TrackingScanner(PassScanner):
-            async def scan(self, content, metadata=None):
+            async def ascan(self, content, metadata=None):
                 nonlocal tier3_ran
                 tier3_ran = True
-                return await super().scan(content, metadata)
+                return await super().ascan(content, metadata)
 
         f = InputFilter()
         f.add(BlockScanner(tier=2))
         f.add(TrackingScanner(tier=3))
-        result = await f.filter("test")
+        result = await f.afilter("test")
 
         assert result.action == Action.BLOCK
         assert tier3_ran is False
@@ -68,7 +68,7 @@ class TestInputFilterPipeline:
         f.add(BlockScanner(tier=1))
         f.add(PassScanner(tier=2))
         f.add(PassScanner(tier=3))
-        result = await f.filter("test")
+        result = await f.afilter("test")
 
         assert result.action == Action.BLOCK
         assert len(result.scan_results) == 1
@@ -78,7 +78,7 @@ class TestInputFilterPipeline:
         f = InputFilter()
         f.add(PassScanner(tier=2))
         f.add(FlagScanner(tier=2))
-        result = await f.filter("test")
+        result = await f.afilter("test")
 
         assert result.action == Action.FLAG
         assert len(result.scan_results) == 2
@@ -88,7 +88,7 @@ class TestInputFilterPipeline:
         f = InputFilter()
         f.add(ErrorScanner(tier=2))
         f.add(PassScanner(tier=2))
-        result = await f.filter("test")
+        result = await f.afilter("test")
 
         assert result.action == Action.BLOCK
         error_results = [r for r in result.scan_results if "fail-closed" in r.description]
@@ -103,15 +103,15 @@ class TestOutputFilterPipeline:
         tier3_ran = False
 
         class TrackingScanner(PassScanner):
-            async def scan(self, content, metadata=None):
+            async def ascan(self, content, metadata=None):
                 nonlocal tier3_ran
                 tier3_ran = True
-                return await super().scan(content, metadata)
+                return await super().ascan(content, metadata)
 
         f = OutputFilter()
         f.add(PassScanner(tier=2))
         f.add(TrackingScanner(tier=3))
-        result = await f.filter("safe output content")
+        result = await f.afilter("safe output content")
 
         assert result.is_safe
         assert tier3_ran is True
@@ -121,6 +121,6 @@ class TestOutputFilterPipeline:
         f = OutputFilter()
         f.add(PassScanner(tier=2))
         f.add(BlockScanner(tier=3))
-        result = await f.filter("output with hidden issue")
+        result = await f.afilter("output with hidden issue")
 
         assert result.action == Action.BLOCK

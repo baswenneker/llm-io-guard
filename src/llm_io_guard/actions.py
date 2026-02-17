@@ -6,6 +6,8 @@ from enum import Enum
 
 import structlog
 
+from .utils.sync import run_sync
+
 logger = structlog.get_logger()
 
 
@@ -46,14 +48,15 @@ class ActionRequest:
     requires_confirmation: bool = field(init=False, default=False)
 
     def __post_init__(self):
+        """Set requires_confirmation based on action category."""
         self.requires_confirmation = self.category in REQUIRES_CONFIRMATION
 
 
-async def validate_action(
+async def avalidate_action(
     action: ActionRequest,
     confirm_callback: Callable[[str], Awaitable[bool]] | None = None,
 ) -> bool:
-    """Validate whether an agent action should be executed."""
+    """Validate whether an agent action should be executed (async)."""
     if action.category in AUTO_ALLOWED:
         return True
 
@@ -72,3 +75,11 @@ async def validate_action(
 
     logger.info("action_auto_allowed", action=action.description, category=action.category.value)
     return True
+
+
+def validate_action(
+    action: ActionRequest,
+    confirm_callback: Callable[[str], Awaitable[bool]] | None = None,
+) -> bool:
+    """Validate whether an agent action should be executed (sync)."""
+    return run_sync(avalidate_action(action, confirm_callback))

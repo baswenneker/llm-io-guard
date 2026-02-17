@@ -161,18 +161,18 @@ class LlmJudgeScanner(Scanner):
         """Return scanner tier."""
         return 3
 
-    async def initialize(self) -> None:
+    async def ainitialize(self) -> None:
         """Initialize the Anthropic client."""
         self._client = anthropic.AsyncAnthropic()
         logger.info("llm_judge_initialized")
 
-    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+    async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         """Scan content using Claude as a safety judge."""
         if self._client is None:
             raise RuntimeError("LlmJudgeScanner not initialized. Call initialize() first.")
 
         if self._rate_limiter is not None:
-            allowed = await self._rate_limiter.acquire(estimated_cost=0.003)
+            allowed = await self._rate_limiter.aacquire(estimated_cost=0.003)
             if not allowed:
                 logger.warning("llm_judge_rate_limited")
                 return ScanResult(
