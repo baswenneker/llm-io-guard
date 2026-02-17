@@ -29,6 +29,11 @@ class HtmlSanitizer(Scanner):
     def tier(self) -> int:
         return 1
 
+    @property
+    def supported_directions(self) -> frozenset[str]:
+        """Only supports input direction."""
+        return frozenset({"input"})
+
     async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
         content_type = (metadata or {}).get("content_type", "text/plain")
 

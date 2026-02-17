@@ -34,6 +34,13 @@ class FilterResult:
     processing_time_ms: float = 0.0
 
     @property
+    def text(self) -> str:
+        """Return sanitized content if available, otherwise original."""
+        return (
+            self.sanitized_content if self.sanitized_content is not None else self.original_content
+        )
+
+    @property
     def is_safe(self) -> bool:
         return self.action == Action.PASS
 

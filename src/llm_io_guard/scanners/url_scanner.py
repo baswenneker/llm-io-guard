@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 import structlog
 from confusable_homoglyphs import confusables
 
-from ..config import PipelineConfig
 from ..models import Action, ScanResult
 from ..scanner import Scanner
 
@@ -59,8 +58,7 @@ def extract_urls(content: str, content_type: str = "text/plain") -> list[str]:
 class UrlScanner(Scanner):
     """URL safety scanner with Google Safe Browsing and homoglyph detection."""
 
-    def __init__(self, config: PipelineConfig):
-        self._config = config
+    def __init__(self) -> None:
         self._safe_browsing = None
 
     @property

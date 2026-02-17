@@ -3,18 +3,18 @@
 
 __version__ = "0.1.0"
 
-from .config import PipelineConfig, ScannerConfig
+from .exceptions import ContentBlocked
+from .filter import InputFilter, OutputFilter
 from .models import Action, FilterResult, ScanResult
-from .pipeline import ContentSafetyPipeline
 from .scanner import Scanner
 
 __all__ = [
     "__version__",
     "Action",
-    "ContentSafetyPipeline",
+    "ContentBlocked",
     "FilterResult",
-    "PipelineConfig",
+    "InputFilter",
+    "OutputFilter",
     "ScanResult",
     "Scanner",
-    "ScannerConfig",
 ]

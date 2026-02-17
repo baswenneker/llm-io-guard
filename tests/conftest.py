@@ -7,8 +7,6 @@ from pathlib import Path
 import pytest
 from _pytest.logging import LogCaptureFixture
 
-from llm_io_guard.config import PipelineConfig
-from llm_io_guard.pipeline import ContentSafetyPipeline
 from llm_io_guard.utils import configure_logging
 
 
@@ -44,15 +42,3 @@ def temp_file(tmp_path: Path) -> Path:
     file_path = tmp_path / "test_file.txt"
     file_path.write_text("Test content")
     return file_path
-
-
-@pytest.fixture
-def pipeline_config() -> PipelineConfig:
-    """Default pipeline configuration for tests."""
-    return PipelineConfig()
-
-
-@pytest.fixture
-def pipeline(pipeline_config: PipelineConfig) -> ContentSafetyPipeline:
-    """Pipeline instance for tests."""
-    return ContentSafetyPipeline(config=pipeline_config)

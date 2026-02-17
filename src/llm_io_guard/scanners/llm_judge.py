@@ -5,7 +5,6 @@ import json
 import anthropic
 import structlog
 
-from ..config import PipelineConfig
 from ..models import Action, ScanResult
 from ..rate_limiter import RateLimiter
 from ..scanner import Scanner
@@ -100,8 +99,17 @@ MAX_CONTENT_LENGTH = 10_000
 class LlmJudgeScanner(Scanner):
     """Content safety classification using Claude Haiku 4.5."""
 
-    def __init__(self, config: PipelineConfig, rate_limiter: RateLimiter | None = None):
-        self._config = config
+    def __init__(
+        self,
+        *,
+        threshold_block: float = 0.8,
+        threshold_flag: float = 0.5,
+        model: str = "claude-haiku-4-5-20251001",
+        rate_limiter: RateLimiter | None = None,
+    ) -> None:
+        self._threshold_block = threshold_block
+        self._threshold_flag = threshold_flag
+        self._model = model
         self._client: anthropic.AsyncAnthropic | None = None
         self._rate_limiter = rate_limiter
 
@@ -121,8 +129,6 @@ class LlmJudgeScanner(Scanner):
         if self._client is None:
             raise RuntimeError("LlmJudgeScanner not initialized. Call initialize() first.")
 
-        scanner_config = self._config.get_scanner_config(self.name)
-
         if self._rate_limiter is not None:
             allowed = await self._rate_limiter.acquire(estimated_cost=0.003)
             if not allowed:
@@ -137,7 +143,7 @@ class LlmJudgeScanner(Scanner):
 
         try:
             response = await self._client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model=self._model,
                 max_tokens=200,
                 system=SYSTEM_PROMPT,
                 messages=[
@@ -155,9 +161,7 @@ class LlmJudgeScanner(Scanner):
 
             if not result["safe"]:
                 action = (
-                    Action.BLOCK
-                    if result["confidence"] >= scanner_config.threshold_block
-                    else Action.FLAG
+                    Action.BLOCK if result["confidence"] >= self._threshold_block else Action.FLAG
                 )
                 return ScanResult(
                     scanner_name=self.name,
@@ -167,7 +171,7 @@ class LlmJudgeScanner(Scanner):
                     details={
                         "category": result["category"],
                         "explanation": result["explanation"],
-                        "model": "claude-haiku-4-5-20251001",
+                        "model": self._model,
                     },
                 )
 
@@ -179,7 +183,7 @@ class LlmJudgeScanner(Scanner):
                 details={
                     "category": result["category"],
                     "explanation": result["explanation"],
-                    "model": "claude-haiku-4-5-20251001",
+                    "model": self._model,
                 },
             )
 

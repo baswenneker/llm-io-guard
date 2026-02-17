@@ -13,7 +13,6 @@ from presidio_analyzer import (
 from presidio_analyzer.nlp_engine import SpacyNlpEngine
 from presidio_anonymizer import AnonymizerEngine
 
-from ..config import PipelineConfig
 from ..models import Action, ScanResult
 from ..scanner import Scanner
 
@@ -140,8 +139,14 @@ class SecretRecognizer(PatternRecognizer):
 class PiiDetector(Scanner):
     """PII and secret detection using Microsoft Presidio with Dutch support."""
 
-    def __init__(self, config: PipelineConfig):
-        self._config = config
+    def __init__(
+        self,
+        *,
+        threshold_block: float = 0.9,
+        threshold_flag: float = 0.7,
+    ) -> None:
+        self._threshold_block = threshold_block
+        self._threshold_flag = threshold_flag
         self._analyzer: AnalyzerEngine | None = None
         self._anonymizer: AnonymizerEngine | None = None
         self._init_lock = asyncio.Lock()
@@ -153,6 +158,11 @@ class PiiDetector(Scanner):
     @property
     def tier(self) -> int:
         return 2
+
+    @property
+    def supported_directions(self) -> frozenset[str]:
+        """Only supports output direction."""
+        return frozenset({"output"})
 
     async def initialize(self) -> None:
         """Initialize Presidio with Dutch spaCy model and custom recognizers."""
@@ -188,8 +198,6 @@ class PiiDetector(Scanner):
             raise RuntimeError("PiiDetector not initialized. Call initialize() first.")
 
         direction = (metadata or {}).get("direction", "input")
-        scanner_config = self._config.get_scanner_config(self.name)
-
         try:
             results_nl = self._analyzer.analyze(text=content, language="nl", entities=None)
             results_en = self._analyzer.analyze(text=content, language="en", entities=None)
@@ -229,12 +237,12 @@ class PiiDetector(Scanner):
                 details={},
             )
 
-        high_confidence_pii = [p for p in pii if p.score >= scanner_config.threshold_flag]
+        high_confidence_pii = [p for p in pii if p.score >= self._threshold_flag]
 
         if direction == "output" and high_confidence_pii:
             anonymized = self._anonymizer.anonymize(
                 text=content,
-                analyzer_results=high_confidence_pii,
+                analyzer_results=high_confidence_pii,  # type: ignore[arg-type]
             )
             return ScanResult(
                 scanner_name=self.name,

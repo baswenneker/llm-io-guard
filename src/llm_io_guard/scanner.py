@@ -33,5 +33,10 @@ class Scanner(ABC):
         """
         ...
 
+    @property
+    def supported_directions(self) -> frozenset[str]:
+        """Directions this scanner supports. Default: both."""
+        return frozenset({"input", "output"})
+
     async def initialize(self) -> None:  # noqa: B027
         """Optional async initialization (model loading, etc.)."""

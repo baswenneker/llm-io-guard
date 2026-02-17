@@ -30,7 +30,7 @@ All tests are async (`asyncio_mode = "auto"`). Use `-n0` to disable parallel exe
 
 ## Architecture
 
-**llm_io_guard** is a layered content safety pipeline for LLM agents. It processes untrusted content through a 3-tier fail-fast pipeline:
+**llm_io_guard** is a layered content safety filter for LLM agents. It uses separate `InputFilter` and `OutputFilter` classes with a builder-pattern API. Content is processed through a 3-tier fail-fast pipeline:
 
 ```
 Tier 1 (< 5ms)  → Sequential deterministic sanitization
@@ -40,43 +40,59 @@ Tier 1 (< 5ms)  → Sequential deterministic sanitization
 Tier 2 (< 50ms) → Parallel ML/pattern detection (asyncio.gather)
                    PromptGuardScanner, PiiDetector, UrlScanner
 
-Tier 3 (< 500ms)→ Conditional LLM judge (only for high-risk sources or flagged content)
+Tier 3 (< 500ms)→ Conditional LLM judge
                    LlmJudgeScanner (Claude Haiku)
 ```
 
-Any BLOCK result short-circuits the pipeline immediately. Tier 2 scanners run concurrently. Tier 3 only runs if content was flagged or the source is in `tier3_sources` (email, web, unknown).
+Usage:
+```python
+from llm_io_guard import InputFilter, OutputFilter, ContentBlocked
+
+input_filter = InputFilter()
+input_filter.add(InvisibleTextScanner())
+input_filter.add(PromptGuardScanner(threshold_block=0.95))
+
+result = await input_filter.filter("untrusted content")
+if result.is_safe:
+    llm_response = await call_llm(result.text)
+
+output_filter = OutputFilter()
+output_filter.add(PiiDetector())
+result = await output_filter.filter(llm_response)
+```
+
+Any BLOCK result short-circuits the pipeline immediately. Tier 2 scanners run concurrently. InputFilter runs Tier 3 only if content was flagged or source risk is high/unknown. OutputFilter always runs Tier 3 if scanners are registered.
+
+Scanners declare `supported_directions` (`"input"`, `"output"`, or both). Filters reject scanners that don't support their direction.
 
 ### Key modules
 
 | Module | Purpose |
 |--------|---------|
-| `src/llm_io_guard/pipeline.py` | `ContentSafetyPipeline` orchestrator — registers scanners by tier, runs fail-fast |
-| `src/llm_io_guard/scanner.py` | `Scanner` ABC — all scanners implement `name`, `tier`, `scan()`, optionally `initialize()` |
+| `src/llm_io_guard/filter.py` | `InputFilter` / `OutputFilter` — builder-pattern filter API with tiered pipeline execution |
+| `src/llm_io_guard/scanner.py` | `Scanner` ABC — all scanners implement `name`, `tier`, `supported_directions`, `scan()`, optionally `initialize()` |
 | `src/llm_io_guard/models.py` | `Action` (PASS/FLAG/BLOCK), `ScanResult`, `FilterResult` dataclasses |
-| `src/llm_io_guard/config.py` | `PipelineConfig` / `ScannerConfig` (Pydantic) — loads from YAML or env vars |
+| `src/llm_io_guard/exceptions.py` | `ContentBlocked` exception for `on_block="raise"` mode |
 | `src/llm_io_guard/actions.py` | `ActionRequest`, `ActionCategory` — agent action validation with confirmation callbacks |
-| `src/llm_io_guard/integration.py` | `safe_fetch_email()`, `safe_fetch_webpage()` — convenience wrappers |
 | `src/llm_io_guard/rate_limiter.py` | Token bucket rate limiter for cost control |
 | `src/llm_io_guard/scanners/` | All 7 scanner implementations |
 
 ### Adding a scanner
 
-1. Extend `Scanner` ABC, set `name`, `tier`, implement `scan()` returning `ScanResult`
-2. Register with `pipeline.register_scanner(MyScanner())`
-3. Add config to `config/default.yaml`
-4. Add tests in `tests/scanners/`
+1. Extend `Scanner` ABC, set `name`, `tier`, `supported_directions`, implement `scan()` returning `ScanResult`
+2. Add to a filter with `filter.add(MyScanner())`
+3. Add tests in `tests/scanners/`
 
 ## Code Conventions
 
 - **Type hints**: Modern Python 3.12 syntax — `dict[str, int]`, `str | None`, `list[T]`. Use `collections.abc` for `Callable`, `Awaitable`.
-- **Async**: All scanner `scan()` methods and pipeline methods are async. Tests use `asyncio_mode = "auto"`.
+- **Async**: All scanner `scan()` methods and filter methods are async. Tests use `asyncio_mode = "auto"`.
 - **Imports**: stdlib → third-party → local (relative with `..`). Enforced by ruff `I` rules.
 - **Line length**: 100 chars (ruff). `E501` is ignored.
 - **Docstrings**: Google-style. 90% coverage enforced by `interrogate`.
 - **Logging**: `structlog` with `get_logger()`. Use `log_context()` context manager, `@log_execution_time`, `@log_exceptions` decorators from `utils/logging.py`.
-- **Config**: Pydantic `BaseModel` with `from_yaml()` / `from_env()` factory methods.
 - **Data models**: `@dataclass(frozen=True)` for immutable value objects (`ScanResult`). Pydantic for validated config.
-- **Tests**: Class-based organization. Integration tests create pipelines with only Tier 1 scanners to avoid model dependencies.
+- **Tests**: Class-based organization. Scanner constructors take direct keyword arguments (thresholds, model paths, etc.) — no config objects.
 
 ## Environment Variables
 

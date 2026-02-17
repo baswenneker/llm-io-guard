@@ -5,21 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 
-from llm_io_guard.config import PipelineConfig, ScannerConfig
 from llm_io_guard.models import Action
 from llm_io_guard.scanners.prompt_guard import PromptGuardScanner
-
-
-@pytest.fixture
-def config():
-    return PipelineConfig(
-        scanners={
-            "prompt_guard": ScannerConfig(
-                threshold_block=0.9,
-                threshold_flag=0.7,
-            )
-        }
-    )
 
 
 @pytest.fixture
@@ -46,8 +33,8 @@ def mock_model():
 
 
 @pytest.fixture
-def scanner(config):
-    return PromptGuardScanner(config=config)
+def scanner():
+    return PromptGuardScanner(threshold_block=0.9, threshold_flag=0.7)
 
 
 @patch("llm_io_guard.scanners.prompt_guard.AutoTokenizer.from_pretrained")

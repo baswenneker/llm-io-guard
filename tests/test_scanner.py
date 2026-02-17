@@ -126,3 +126,26 @@ class TestScannerABC:
         scanner = ConcreteScanner()
         # Should not raise
         await scanner.initialize()
+
+    def test_supported_directions_default(self):
+        """Default supported_directions includes both input and output."""
+
+        class ConcreteScanner(Scanner):
+            @property
+            def name(self) -> str:
+                return "concrete"
+
+            @property
+            def tier(self) -> int:
+                return 1
+
+            async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+                return ScanResult(
+                    scanner_name=self.name,
+                    action=Action.PASS,
+                    confidence=1.0,
+                    description="ok",
+                )
+
+        scanner = ConcreteScanner()
+        assert scanner.supported_directions == frozenset({"input", "output"})

@@ -1,6 +1,8 @@
 """Prompt injection detection using Meta Prompt Guard 2."""
 
 import asyncio
+import os
+from pathlib import Path
 
 import structlog
 import torch
@@ -11,7 +13,6 @@ from transformers import (
     PreTrainedTokenizerBase,
 )
 
-from ..config import PipelineConfig
 from ..models import Action, ScanResult
 from ..scanner import Scanner
 
@@ -23,8 +24,18 @@ LABELS = {0: "benign", 1: "injection", 2: "jailbreak"}
 class PromptGuardScanner(Scanner):
     """Prompt injection detection using Meta Prompt Guard 2."""
 
-    def __init__(self, config: PipelineConfig):
-        self._config = config
+    def __init__(
+        self,
+        *,
+        threshold_block: float = 0.9,
+        threshold_flag: float = 0.7,
+        model_cache_dir: str | None = None,
+    ) -> None:
+        self._threshold_block = threshold_block
+        self._threshold_flag = threshold_flag
+        self._model_cache_dir = model_cache_dir or os.environ.get(
+            "LLM_IO_GUARD_MODEL_DIR", str(Path.home() / ".cache" / "llm_io_guard")
+        )
         self._model: PreTrainedModel | None = None
         self._tokenizer: PreTrainedTokenizerBase | None = None
         self._init_lock = asyncio.Lock()
@@ -37,6 +48,11 @@ class PromptGuardScanner(Scanner):
     def tier(self) -> int:
         return 2
 
+    @property
+    def supported_directions(self) -> frozenset[str]:
+        """Only supports input direction."""
+        return frozenset({"input"})
+
     async def initialize(self) -> None:
         """Load model and tokenizer (singleton pattern)."""
         async with self._init_lock:
@@ -45,7 +61,7 @@ class PromptGuardScanner(Scanner):
 
             model_name = "meta-llama/Prompt-Guard-2-86M"
             model_revision = "a8ded8e697ce7c355e395a0df51f94adb4a2fd27"
-            cache_dir = self._config.model_cache_dir
+            cache_dir = self._model_cache_dir
 
             logger.info("loading_prompt_guard", model=model_name)
 
@@ -64,7 +80,6 @@ class PromptGuardScanner(Scanner):
         if self._model is None or self._tokenizer is None:
             raise RuntimeError("PromptGuardScanner not initialized. Call initialize() first.")
 
-        scanner_config = self._config.get_scanner_config(self.name)
         chunks = self._chunk_text(content)
         max_injection_score = 0.0
         max_jailbreak_score = 0.0
@@ -87,7 +102,7 @@ class PromptGuardScanner(Scanner):
         threat_score = max(max_injection_score, max_jailbreak_score)
         threat_type = "injection" if max_injection_score >= max_jailbreak_score else "jailbreak"
 
-        if threat_score >= scanner_config.threshold_block:
+        if threat_score >= self._threshold_block:
             return ScanResult(
                 scanner_name=self.name,
                 action=Action.BLOCK,
@@ -100,7 +115,7 @@ class PromptGuardScanner(Scanner):
                     "chunks_analyzed": len(chunks),
                 },
             )
-        elif threat_score >= scanner_config.threshold_flag:
+        elif threat_score >= self._threshold_flag:
             return ScanResult(
                 scanner_name=self.name,
                 action=Action.FLAG,
@@ -157,7 +172,7 @@ class PromptGuardScanner(Scanner):
         while start < len(tokens):
             end = start + max_tokens
             chunk_tokens = tokens[start:end]
-            chunk_text: str = self._tokenizer.decode(chunk_tokens)
+            chunk_text = str(self._tokenizer.decode(chunk_tokens))
             chunks.append(chunk_text)
             start += max_tokens - overlap
 

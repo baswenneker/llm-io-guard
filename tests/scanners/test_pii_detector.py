@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llm_io_guard.config import PipelineConfig
 from llm_io_guard.models import Action
 from llm_io_guard.scanners.pii_detector import (
     BsnRecognizer,
@@ -90,8 +89,7 @@ def _make_analyzer_result(entity_type: str, start: int, end: int, score: float):
 
 class TestPiiDetector:
     def setup_method(self):
-        self.config = PipelineConfig()
-        self.detector = PiiDetector(self.config)
+        self.detector = PiiDetector(threshold_block=0.9, threshold_flag=0.7)
 
     async def test_not_initialized_raises(self):
         with pytest.raises(RuntimeError, match="not initialized"):

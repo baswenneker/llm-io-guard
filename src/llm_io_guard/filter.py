@@ -1,57 +1,87 @@
-"""Content safety pipeline orchestrator."""
+"""Input and output content safety filters."""
+
+from __future__ import annotations
 
 import asyncio
 import time
+from abc import ABC, abstractmethod
+from typing import Self
 
 import structlog
 
-from .config import PipelineConfig
+from .exceptions import ContentBlocked
 from .models import Action, FilterResult, ScanResult
-from .scanner import Scanner
+from .scanner import Scanner  # noqa: TC001 - used at runtime in dict construction
 
 logger = structlog.get_logger()
 
 PIPELINE_TIERS: tuple[int, ...] = (1, 2, 3)
 
 
-class ContentSafetyPipeline:
-    """Tiered content safety pipeline with fail-fast behavior."""
+class BaseFilter(ABC):
+    """Base class for input/output content filters."""
 
-    def __init__(self, config: PipelineConfig) -> None:
-        self.config = config
+    def __init__(self, *, on_block: str = "result", max_content_length: int = 100_000) -> None:
+        """Initialize the filter with on_block behavior and content length limit."""
+        if on_block not in ("result", "raise", "none"):
+            raise ValueError(f"on_block must be 'result', 'raise', or 'none', got '{on_block}'")
+        self._on_block = on_block
         self._scanners: dict[int, list[Scanner]] = {tier: [] for tier in PIPELINE_TIERS}
+        self._max_content_length = max_content_length
+        self._initialized = False
 
-    def register_scanner(self, scanner: Scanner) -> None:
-        """Register a scanner in the appropriate tier."""
+    def add(self, scanner: Scanner) -> Self:
+        """Add a scanner to this filter.
+
+        Validates that the scanner supports this filter's direction and
+        groups it by tier. Returns self for chaining.
+        """
+        if self._direction() not in scanner.supported_directions:
+            raise ValueError(
+                f"Scanner '{scanner.name}' does not support direction '{self._direction()}'. "
+                f"Supported: {scanner.supported_directions}"
+            )
         if scanner.tier not in self._scanners:
             raise ValueError(f"Invalid tier: {scanner.tier}. Must be one of {PIPELINE_TIERS}.")
         self._scanners[scanner.tier].append(scanner)
-        logger.info("scanner_registered", scanner=scanner.name, tier=scanner.tier)
+        logger.info("scanner_added", scanner=scanner.name, tier=scanner.tier)
+        return self
 
     async def initialize(self) -> None:
         """Initialize all registered scanners."""
         for tier_scanners in self._scanners.values():
             await asyncio.gather(*(s.initialize() for s in tier_scanners))
+        self._initialized = True
 
-    async def scan(
-        self,
-        content: str,
-        metadata: dict | None = None,
-        direction: str = "input",
-    ) -> FilterResult:
-        """Run content through the tiered pipeline.
+    async def filter(self, content: str, metadata: dict | None = None) -> FilterResult | str | None:
+        """Run content through the filter pipeline.
 
-        Args:
-            content: The text content to scan.
-            metadata: Optional metadata (source, sender, content_type, etc.)
-            direction: "input" or "output"
-
-        Returns:
-            FilterResult with aggregated action and all scan results.
+        Returns based on on_block mode:
+          - "result": always returns FilterResult
+          - "raise": returns str on pass, raises ContentBlocked on block
+          - "none": returns str on pass, None on block
         """
+        if not self._initialized:
+            await self.initialize()
+
+        result = await self._run_pipeline(content, metadata)
+
+        if self._on_block == "result":
+            return result
+        elif self._on_block == "raise":
+            if result.action == Action.BLOCK:
+                raise ContentBlocked(result)
+            return result.text
+        else:  # "none"
+            if result.action == Action.BLOCK:
+                return None
+            return result.text
+
+    async def _run_pipeline(self, content: str, metadata: dict | None = None) -> FilterResult:
+        """Execute the tiered scanning pipeline."""
         start_time = time.perf_counter()
 
-        if len(content) > self.config.max_content_length:
+        if len(content) > self._max_content_length:
             return FilterResult(
                 action=Action.BLOCK,
                 original_content=content,
@@ -60,14 +90,12 @@ class ContentSafetyPipeline:
             )
 
         result = FilterResult(action=Action.PASS, original_content=content)
-        scan_metadata = {**(metadata or {}), "direction": direction}
+        scan_metadata = {**(metadata or {}), "direction": self._direction()}
 
         current_content = content
 
         for tier in PIPELINE_TIERS:
-            tier_scanners = [
-                s for s in self._scanners[tier] if self.config.is_scanner_enabled(s.name)
-            ]
+            tier_scanners = self._scanners[tier]
 
             if not tier_scanners:
                 continue
@@ -162,16 +190,46 @@ class ContentSafetyPipeline:
 
         result.processing_time_ms = (time.perf_counter() - start_time) * 1000
         logger.info(
-            "pipeline_complete",
+            "filter_complete",
             action=result.action.value,
             duration_ms=round(result.processing_time_ms, 2),
             scanners_run=len(result.scan_results),
         )
         return result
 
+    @abstractmethod
+    def _direction(self) -> str:
+        """Return the direction this filter operates on."""
+        ...
+
+    @abstractmethod
     def _should_run_tier3(self, result: FilterResult, metadata: dict) -> bool:
-        """Determine if Tier 3 (LLM judge) should run."""
+        """Determine if Tier 3 scanners should run."""
+        ...
+
+
+class InputFilter(BaseFilter):
+    """Filter for untrusted input content (emails, web pages, etc.)."""
+
+    def _direction(self) -> str:
+        """Return 'input' direction."""
+        return "input"
+
+    def _should_run_tier3(self, result: FilterResult, metadata: dict) -> bool:
+        """Run tier 3 if content was flagged or source risk is high/unknown."""
         if result.action == Action.FLAG:
             return True
         source_risk = metadata.get("source_risk", "low")
         return source_risk in ("high", "unknown")
+
+
+class OutputFilter(BaseFilter):
+    """Filter for LLM output content."""
+
+    def _direction(self) -> str:
+        """Return 'output' direction."""
+        return "output"
+
+    def _should_run_tier3(self, result: FilterResult, metadata: dict) -> bool:
+        """Always run tier 3 on output if scanners are registered."""
+        return True

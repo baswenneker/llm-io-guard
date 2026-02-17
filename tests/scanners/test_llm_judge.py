@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import anthropic
 import pytest
 
-from llm_io_guard.config import PipelineConfig, ScannerConfig
 from llm_io_guard.models import Action
 from llm_io_guard.scanners.llm_judge import (
     FEW_SHOT_EXAMPLES,
@@ -16,20 +15,8 @@ from llm_io_guard.scanners.llm_judge import (
 
 
 @pytest.fixture
-def config():
-    return PipelineConfig(
-        scanners={
-            "llm_judge": ScannerConfig(
-                threshold_block=0.9,
-                threshold_flag=0.7,
-            ),
-        },
-    )
-
-
-@pytest.fixture
-def scanner(config):
-    return LlmJudgeScanner(config)
+def scanner():
+    return LlmJudgeScanner(threshold_block=0.9, threshold_flag=0.7)
 
 
 @pytest.fixture

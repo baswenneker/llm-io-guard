@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llm_io_guard.config import PipelineConfig
 from llm_io_guard.models import Action
 from llm_io_guard.scanners.url_scanner import UrlScanner, extract_urls
 
@@ -44,12 +43,8 @@ class TestExtractUrls:
 
 class TestUrlScanner:
     @pytest.fixture
-    def config(self):
-        return PipelineConfig()
-
-    @pytest.fixture
-    def scanner(self, config):
-        return UrlScanner(config)
+    def scanner(self):
+        return UrlScanner()
 
     async def test_no_urls_passes(self, scanner):
         result = await scanner.scan("Hello, no URLs here.")
@@ -132,7 +127,7 @@ class TestUrlScanner:
 class TestHomoglyphDetection:
     @pytest.fixture
     def scanner(self):
-        return UrlScanner(PipelineConfig())
+        return UrlScanner()
 
     def test_cyrillic_a_detected(self, scanner):
         # Cyrillic 'а' (U+0430) in "аpple.com"
