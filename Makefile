@@ -19,12 +19,12 @@ test-serial:  ## Run serial tests only (non-thread-safe)
 test-cov:  ## Run tests with coverage report
 	uv run pytest --cov=src/llm_io_guard --cov-report=term-missing --cov-report=html
 
-fmt:  ## Format code with black and ruff
-	uv run black src tests scripts
-	uv run ruff check --fix src tests scripts
+fmt:  ## Format code with ruff
+	uv run ruff format src tests
+	uv run ruff check --fix src tests
 
 lint:  ## Run all linters
-	uv run ruff check src tests scripts
+	uv run ruff check src tests
 	uv run mypy src
 	uv run bandit -r src
 	uv run pyright src

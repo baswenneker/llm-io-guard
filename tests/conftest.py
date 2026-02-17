@@ -1,17 +1,15 @@
 """Pytest configuration and fixtures."""
 
 import logging
-import sys
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pytest
 from _pytest.logging import LogCaptureFixture
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-from utils import configure_logging
+from llm_io_guard.config import PipelineConfig
+from llm_io_guard.pipeline import ContentSafetyPipeline
+from llm_io_guard.utils import configure_logging
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -46,3 +44,15 @@ def temp_file(tmp_path: Path) -> Path:
     file_path = tmp_path / "test_file.txt"
     file_path.write_text("Test content")
     return file_path
+
+
+@pytest.fixture
+def pipeline_config() -> PipelineConfig:
+    """Default pipeline configuration for tests."""
+    return PipelineConfig()
+
+
+@pytest.fixture
+def pipeline(pipeline_config: PipelineConfig) -> ContentSafetyPipeline:
+    """Pipeline instance for tests."""
+    return ContentSafetyPipeline(config=pipeline_config)

@@ -10,8 +10,8 @@ authors = [
 ]
 dependencies = [
     "structlog>=24.0.0",
-    "colorama>=0.4.6",
-    "python-json-logger>=2.0.7",
+    "pydantic>=2.5,<3",
+    "pyyaml>=6.0,<7",
 ]
 
 [project.optional-dependencies]
@@ -21,11 +21,11 @@ dev = [
     "pytest-cov>=4.1.0",
     "pytest-asyncio>=0.23.0",
     "ruff>=0.3.0",
-    "black>=24.0.0",
     "mypy>=1.8.0",
     "pyright>=1.1.0",
     "bandit[toml]>=1.7.0",
     "interrogate>=1.5.0",
+    "types-PyYAML>=6.0",
 ]
 notebooks = [
     "jupyter>=1.0.0",
@@ -51,19 +51,22 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/llm_io_guard", "src/utils"]
+packages = ["src/llm_io_guard"]
 
 
 [tool.pytest.ini_options]
 # addopts = "-p no:warnings -rPA --color=yes -s " # Uncomment the next line to run tests in parallel with auto-discovery
 addopts = "-p no:warnings -rPA --color=yes -s -n auto"
 env = ["ENVIRONMENT=test"]
+asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 markers = [
     "serial: marks tests as serial, often when accessing dbs or files that are not thread-safe (deselect with '-m \"not serial\"')",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "adversarial: adversarial test cases",
 ]
 
 [tool.pyright]
@@ -80,10 +83,14 @@ targets = ["src"]
 
 [tool.ruff]
 fix = true
-lint.select = ["E", "F", "I", "N", "W", "B"]
+lint.select = ["E", "F", "I", "N", "W", "UP", "S", "B", "A", "C4", "SIM", "TCH"]
 lint.ignore = ["E501"]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+"tests/helpers.py" = ["S101"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [
