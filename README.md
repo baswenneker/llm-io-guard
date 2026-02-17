@@ -218,7 +218,6 @@ This project uses Meta Prompt Guard 2, which is licensed under the **Llama 4 Com
 | defusedxml | PSF License | [License](https://github.com/tiran/defusedxml/blob/main/LICENSE) |
 | pysafebrowsing | MIT | [License](https://github.com/pysafebrowsing/pysafebrowsing/blob/main/LICENSE) |
 | confusable_homoglyphs | MIT | [License](https://github.com/vhf/confusable_homoglyphs/blob/master/LICENSE) |
-| detect-secrets | Apache 2.0 | [License](https://github.com/Yelp/detect-secrets/blob/master/LICENSE) |
 
 ## Development
 

@@ -39,13 +39,59 @@ jobs:
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@76f52bc884231f62b54027292910bd78354f7f15  # v1.12.4
         with:
           repository-url: https://test.pypi.org/legacy/
 
+  smoke-test:
+    name: Smoke test from TestPyPI
+    needs: publish-testpypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install from TestPyPI
+        run: |
+          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ llm-io-guard
+      - name: Verify imports
+        run: |
+          python -c "from llm_io_guard import InputFilter, OutputFilter; print('OK')"
+
+  minimal-install:
+    name: Test minimal install
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install wheel (core only)
+        run: pip install dist/*.whl
+      - name: Verify core imports
+        run: |
+          python -c "from llm_io_guard import InputFilter, OutputFilter; print('Core OK')"
+          python -c "from llm_io_guard.scanners import InvisibleTextScanner, HtmlSanitizer; print('Tier 1 OK')"
+      - name: Verify optional scanners raise ImportError
+        run: |
+          python -c "
+          import sys
+          try:
+              from llm_io_guard.scanners.prompt_guard import PromptGuardScanner
+              PromptGuardScanner()
+              sys.exit(1)
+          except ImportError as e:
+              assert 'pip install' in str(e)
+              print(f'PromptGuardScanner: OK ({e})')
+          "
+
   publish-pypi:
     name: Publish to PyPI
-    needs: publish-testpypi
+    needs: [smoke-test, minimal-install]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -57,4 +103,4 @@ jobs:
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@76f52bc884231f62b54027292910bd78354f7f15  # v1.12.4

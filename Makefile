@@ -47,7 +47,7 @@ dev:  ## Install and run development checks
 	$(MAKE) docs
 	$(MAKE) test
 
-build:  ## Build sdist and wheel
+build: clean-dist  ## Build sdist and wheel
 	uv run python -m build
 
 publish-test:  ## Upload to TestPyPI
