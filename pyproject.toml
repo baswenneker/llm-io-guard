@@ -1,5 +1,5 @@
 [project]
-name = "llm_io_guard"
+name = "llm-io-guard"
 version = "0.1.0"
 description = "Extensible LLM input/output content filter"
 readme = "README.md"
@@ -29,10 +29,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/HeadingFWD/llm_io_guard"
-Repository = "https://github.com/HeadingFWD/llm_io_guard"
-Issues = "https://github.com/HeadingFWD/llm_io_guard/issues"
-Changelog = "https://github.com/HeadingFWD/llm_io_guard/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/baswenneker/llm-io-guard"
+Repository = "https://github.com/baswenneker/llm-io-guard"
+Issues = "https://github.com/baswenneker/llm-io-guard/issues"
+Changelog = "https://github.com/baswenneker/llm-io-guard/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 ml = [
