@@ -12,6 +12,8 @@ dependencies = [
     "structlog>=24.0.0",
     "pydantic>=2.5,<3",
     "pyyaml>=6.0,<7",
+    "html-sanitizer>=2.0",
+    "defusedxml>=0.7.0",
 ]
 
 [project.optional-dependencies]
