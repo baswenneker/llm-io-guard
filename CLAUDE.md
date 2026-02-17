@@ -47,6 +47,9 @@ Tier 3 (< 500ms)→ Conditional LLM judge
 Usage:
 ```python
 from llm_io_guard import InputFilter, OutputFilter, ContentBlocked
+from llm_io_guard.scanners.invisible_text import InvisibleTextScanner
+from llm_io_guard.scanners.prompt_guard import PromptGuardScanner
+from llm_io_guard.scanners.pii_detector import PiiDetector
 
 input_filter = InputFilter()
 input_filter.add(InvisibleTextScanner())

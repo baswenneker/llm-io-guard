@@ -140,7 +140,7 @@ class UrlScanner(Scanner):
             return []
         threats = []
         # pysafebrowsing supports batch lookup — run in executor to avoid blocking
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, self._safe_browsing.lookup_urls, urls)
 
         for url, info in result.items():

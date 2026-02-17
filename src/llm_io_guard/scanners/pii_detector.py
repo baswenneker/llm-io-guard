@@ -28,7 +28,8 @@ SECRET_ENTITY_TYPES = {
 class BsnRecognizer(PatternRecognizer):
     """Dutch BSN (burgerservicenummer) recognizer with 11-proef validation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize with BSN digit patterns."""
         patterns = [
             Pattern(
                 name="bsn_pattern",
@@ -60,7 +61,8 @@ class BsnRecognizer(PatternRecognizer):
 class DutchPhoneRecognizer(PatternRecognizer):
     """Dutch phone number recognizer."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize with Dutch phone number patterns."""
         patterns = [
             Pattern(
                 name="nl_phone_international",
@@ -84,7 +86,8 @@ class DutchPhoneRecognizer(PatternRecognizer):
 class DutchPostalCodeRecognizer(PatternRecognizer):
     """Dutch postal code recognizer (4 digits + 2 letters)."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize with Dutch postal code pattern."""
         patterns = [
             Pattern(
                 name="nl_postal_code",
@@ -103,7 +106,8 @@ class DutchPostalCodeRecognizer(PatternRecognizer):
 class SecretRecognizer(PatternRecognizer):
     """Detects API keys, tokens, and other secrets."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize with secret detection patterns."""
         patterns = [
             Pattern(name="openai_key", regex=r"sk-[a-zA-Z0-9]{20,}", score=0.95),
             Pattern(name="anthropic_key", regex=r"sk-ant-[a-zA-Z0-9\-]{20,}", score=0.95),
@@ -145,6 +149,14 @@ class PiiDetector(Scanner):
         threshold_block: float = 0.9,
         threshold_flag: float = 0.7,
     ) -> None:
+        """Initialize the PII detector scanner.
+
+        Args:
+            threshold_block: Minimum confidence score to BLOCK content (default: 0.9).
+                Applied to secret detection (API keys, tokens, etc.).
+            threshold_flag: Minimum confidence score to FLAG PII (default: 0.7).
+                PII above this threshold is flagged and optionally redacted on output.
+        """
         self._threshold_block = threshold_block
         self._threshold_flag = threshold_flag
         self._analyzer: AnalyzerEngine | None = None
@@ -197,7 +209,7 @@ class PiiDetector(Scanner):
         if self._analyzer is None or self._anonymizer is None:
             raise RuntimeError("PiiDetector not initialized. Call initialize() first.")
 
-        direction = (metadata or {}).get("direction", "input")
+        direction = (metadata or {}).get("direction", "output")
         try:
             results_nl = self._analyzer.analyze(text=content, language="nl", entities=None)
             results_en = self._analyzer.analyze(text=content, language="en", entities=None)

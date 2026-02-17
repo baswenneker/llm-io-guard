@@ -25,7 +25,11 @@ class ScanResult:
 
 @dataclass
 class FilterResult:
-    """Aggregated result from the full pipeline."""
+    """Aggregated result from the full pipeline.
+
+    Note: Unlike ``ScanResult``, this dataclass is intentionally mutable so the
+    pipeline can accumulate scan results and update the action as tiers execute.
+    """
 
     action: Action
     scan_results: list[ScanResult] = field(default_factory=list)
@@ -42,12 +46,15 @@ class FilterResult:
 
     @property
     def is_safe(self) -> bool:
+        """Whether the content passed all scanners without a BLOCK action."""
         return self.action == Action.PASS
 
     @property
     def blocked_by(self) -> list[ScanResult]:
+        """Scan results that produced a BLOCK action."""
         return [r for r in self.scan_results if r.action == Action.BLOCK]
 
     @property
     def flagged_by(self) -> list[ScanResult]:
+        """Scan results that produced a FLAG action."""
         return [r for r in self.scan_results if r.action == Action.FLAG]

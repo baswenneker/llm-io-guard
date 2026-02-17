@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from abc import ABC, abstractmethod
-from typing import Self
+from typing import Literal, Self
 
 import structlog
 
@@ -17,12 +17,28 @@ logger = structlog.get_logger()
 
 PIPELINE_TIERS: tuple[int, ...] = (1, 2, 3)
 
+OnBlockMode = Literal["result", "raise", "none"]
+
 
 class BaseFilter(ABC):
     """Base class for input/output content filters."""
 
-    def __init__(self, *, on_block: str = "result", max_content_length: int = 100_000) -> None:
-        """Initialize the filter with on_block behavior and content length limit."""
+    def __init__(
+        self,
+        *,
+        on_block: OnBlockMode = "result",
+        max_content_length: int = 100_000,
+    ) -> None:
+        """Initialize the filter with on_block behavior and content length limit.
+
+        Args:
+            on_block: Behavior when content is blocked.
+                ``"result"`` — always return a ``FilterResult`` (default).
+                ``"raise"``  — return ``str`` on pass, raise ``ContentBlocked`` on block.
+                ``"none"``   — return ``str`` on pass, ``None`` on block.
+            max_content_length: Maximum allowed content length in characters.
+                Content exceeding this limit is immediately blocked.
+        """
         if on_block not in ("result", "raise", "none"):
             raise ValueError(f"on_block must be 'result', 'raise', or 'none', got '{on_block}'")
         self._on_block = on_block
@@ -109,9 +125,9 @@ class BaseFilter(ABC):
                         logger.error("scanner_error", scanner=scanner.name, tier=tier, error=str(e))
                         scan_result = ScanResult(
                             scanner_name=scanner.name,
-                            action=Action.FLAG,
+                            action=Action.BLOCK,
                             confidence=0.0,
-                            description=f"Scanner error: {e}",
+                            description=f"Scanner error (fail-closed): {e}",
                             details={"error": str(e)},
                         )
                     result.scan_results.append(scan_result)
@@ -136,6 +152,8 @@ class BaseFilter(ABC):
                 tier_results = []
                 for i, raw_result in enumerate(tier_results_raw):
                     if isinstance(raw_result, BaseException):
+                        if not isinstance(raw_result, Exception):
+                            raise raw_result  # propagate CancelledError, KeyboardInterrupt
                         logger.error(
                             "scanner_error",
                             scanner=tier_scanners[i].name,
@@ -145,9 +163,9 @@ class BaseFilter(ABC):
                         tier_results.append(
                             ScanResult(
                                 scanner_name=tier_scanners[i].name,
-                                action=Action.FLAG,
+                                action=Action.BLOCK,
                                 confidence=0.0,
-                                description=f"Scanner error: {raw_result}",
+                                description=f"Scanner error (fail-closed): {raw_result}",
                                 details={"error": str(raw_result)},
                             )
                         )
@@ -178,9 +196,9 @@ class BaseFilter(ABC):
                         logger.error("scanner_error", scanner=scanner.name, tier=tier, error=str(e))
                         scan_result = ScanResult(
                             scanner_name=scanner.name,
-                            action=Action.FLAG,
+                            action=Action.BLOCK,
                             confidence=0.0,
-                            description=f"Scanner error: {e}",
+                            description=f"Scanner error (fail-closed): {e}",
                             details={"error": str(e)},
                         )
                     result.scan_results.append(scan_result)

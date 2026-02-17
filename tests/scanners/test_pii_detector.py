@@ -198,3 +198,22 @@ class TestPiiDetector:
         assert result.action == Action.PASS
         assert result.confidence == 0.3
         assert "below threshold" in result.description
+
+    @patch("llm_io_guard.scanners.pii_detector.AnonymizerEngine")
+    @patch("llm_io_guard.scanners.pii_detector.AnalyzerEngine")
+    @patch("llm_io_guard.scanners.pii_detector.RecognizerRegistry")
+    @patch("llm_io_guard.scanners.pii_detector.SpacyNlpEngine")
+    async def test_analysis_error_returns_flag(
+        self, mock_spacy, mock_registry, mock_analyzer_cls, mock_anon_cls
+    ):
+        """analyzer.analyze() raising an exception returns FLAG."""
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze.side_effect = RuntimeError("spaCy model error")
+        mock_analyzer_cls.return_value = mock_analyzer
+        mock_anon_cls.return_value = MagicMock()
+
+        await self.detector.initialize()
+        result = await self.detector.scan("some content")
+
+        assert result.action == Action.FLAG
+        assert "PII detection error" in result.description

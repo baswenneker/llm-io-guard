@@ -151,8 +151,12 @@ async def test_content_truncation(scanner, mock_anthropic_response):
 
         call_args = mock_client.messages.create.call_args
         user_message = call_args.kwargs["messages"][-1]["content"]
-        # The prefix is "Content to analyze:\n\n", so the total length is prefix + truncated content
-        content_portion = user_message.removeprefix("Content to analyze:\n\n")
+        # Content is wrapped in XML tags: <content_to_analyze>...</content_to_analyze>
+        prefix = "<content_to_analyze>"
+        suffix = "</content_to_analyze>"
+        assert user_message.startswith(prefix)
+        assert user_message.endswith(suffix)
+        content_portion = user_message.removeprefix(prefix).removesuffix(suffix)
         assert len(content_portion) == MAX_CONTENT_LENGTH
 
 
@@ -208,6 +212,70 @@ async def test_initialize_creates_client(scanner):
         await scanner.initialize()
         mock_cls.assert_called_once()
     assert scanner._client is not None
+
+
+async def test_empty_response_content(scanner):
+    """Empty response.content raises IndexError, caught by broad handler → BLOCK."""
+    response = MagicMock()
+    response.content = []  # empty — causes IndexError on response.content[0]
+
+    with patch.object(scanner, "_client") as mock_client:
+        mock_client.messages.create = AsyncMock(return_value=response)
+        result = await scanner.scan("test content")
+
+    assert result.action == Action.BLOCK
+    assert result.confidence == 1.0
+    assert "fail-closed" in result.description
+
+
+async def test_non_text_block_response(scanner):
+    """Response with non-text content block raises AttributeError → BLOCK."""
+    response = MagicMock()
+    content_block = MagicMock(spec=[])  # no .text attribute
+    del content_block.text  # ensure AttributeError on access
+    response.content = [content_block]
+
+    with patch.object(scanner, "_client") as mock_client:
+        mock_client.messages.create = AsyncMock(return_value=response)
+        result = await scanner.scan("test content")
+
+    assert result.action == Action.BLOCK
+    assert result.confidence == 1.0
+    assert "fail-closed" in result.description
+
+
+async def test_invalid_safe_type_blocks(scanner):
+    """Response with 'safe' as string instead of bool triggers validation error → BLOCK."""
+    response = MagicMock()
+    content_block = MagicMock()
+    content_block.text = json.dumps(
+        {"safe": "true", "confidence": 0.9, "category": "none", "explanation": "test"}
+    )
+    response.content = [content_block]
+
+    with patch.object(scanner, "_client") as mock_client:
+        mock_client.messages.create = AsyncMock(return_value=response)
+        result = await scanner.scan("test content")
+
+    assert result.action == Action.BLOCK
+    assert "fail-closed" in result.description
+
+
+async def test_invalid_confidence_type_blocks(scanner):
+    """Response with 'confidence' as string instead of number triggers validation error → BLOCK."""
+    response = MagicMock()
+    content_block = MagicMock()
+    content_block.text = json.dumps(
+        {"safe": True, "confidence": "high", "category": "none", "explanation": "test"}
+    )
+    response.content = [content_block]
+
+    with patch.object(scanner, "_client") as mock_client:
+        mock_client.messages.create = AsyncMock(return_value=response)
+        result = await scanner.scan("test content")
+
+    assert result.action == Action.BLOCK
+    assert "fail-closed" in result.description
 
 
 async def test_scanner_properties(scanner):

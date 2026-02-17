@@ -1,11 +1,14 @@
 """Tests for InputFilter and OutputFilter."""
 
+import asyncio
+
 import pytest
 
 from llm_io_guard import Action, ContentBlocked, FilterResult, InputFilter, OutputFilter
 from tests.helpers import (
     BlockScanner,
     ErrorScanner,
+    FlagScanner,
     PassScanner,
     SanitizingScanner,
 )
@@ -94,13 +97,147 @@ class TestInputFilter:
         assert isinstance(result, FilterResult)
         assert result.action == Action.BLOCK
 
-    async def test_error_scanner_produces_flag(self):
-        """Scanner that raises an exception produces FLAG result."""
+    async def test_error_scanner_produces_block(self):
+        """Scanner that raises an exception produces BLOCK result (fail-closed)."""
         f = InputFilter()
         f.add(ErrorScanner(tier=2))
         result = await f.filter("test")
         assert isinstance(result, FilterResult)
-        assert result.action == Action.FLAG
+        assert result.action == Action.BLOCK
+        assert "fail-closed" in result.scan_results[0].description
+
+    async def test_tier1_error_scanner_produces_block(self):
+        """Tier 1 scanner error produces BLOCK (fail-closed), not FLAG."""
+        f = InputFilter()
+        f.add(ErrorScanner(tier=1))
+        result = await f.filter("test")
+        assert isinstance(result, FilterResult)
+        assert result.action == Action.BLOCK
+        assert "fail-closed" in result.scan_results[0].description
+
+    async def test_tier3_error_scanner_produces_block(self):
+        """Tier 3 scanner error produces BLOCK (fail-closed), not FLAG."""
+        f = InputFilter()
+        f.add(FlagScanner(tier=2))  # FLAG triggers Tier 3 for InputFilter
+        f.add(ErrorScanner(tier=3))
+        result = await f.filter("test")
+        assert isinstance(result, FilterResult)
+        assert result.action == Action.BLOCK
+        block_results = [r for r in result.scan_results if r.action == Action.BLOCK]
+        assert any("fail-closed" in r.description for r in block_results)
+
+    async def test_tier2_cancelled_error_propagates(self):
+        """CancelledError in Tier 2 is re-raised, not swallowed."""
+        from llm_io_guard.models import ScanResult
+        from llm_io_guard.scanner import Scanner
+
+        class CancelScanner(Scanner):
+            """Scanner that raises CancelledError."""
+
+            @property
+            def name(self) -> str:
+                return "cancel_scanner"
+
+            @property
+            def tier(self) -> int:
+                return 2
+
+            async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+                raise asyncio.CancelledError()
+
+        f = InputFilter()
+        f.add(CancelScanner())
+        with pytest.raises(asyncio.CancelledError):
+            await f.filter("test")
+
+
+# ---------------------------------------------------------------------------
+# Tier 3 conditional logic
+# ---------------------------------------------------------------------------
+
+
+class TestTier3ConditionalLogic:
+    """Tests for InputFilter._should_run_tier3 conditions."""
+
+    async def test_tier3_runs_on_flag(self):
+        """Tier 3 runs when a Tier 2 scanner flags content."""
+        tier3_ran = False
+
+        class TrackingPassScanner(PassScanner):
+            async def scan(self, content, metadata=None):
+                nonlocal tier3_ran
+                tier3_ran = True
+                return await super().scan(content, metadata)
+
+        f = InputFilter()
+        f.add(FlagScanner(tier=2))  # Tier 2 produces FLAG
+        f.add(TrackingPassScanner(tier=3))  # Tier 3 should run
+        await f.filter("test")
+        assert tier3_ran is True
+
+    async def test_tier3_skipped_on_pass_low_risk(self):
+        """Tier 3 is skipped when Tier 2 passes and source_risk is low."""
+        tier3_ran = False
+
+        class TrackingPassScanner(PassScanner):
+            async def scan(self, content, metadata=None):
+                nonlocal tier3_ran
+                tier3_ran = True
+                return await super().scan(content, metadata)
+
+        f = InputFilter()
+        f.add(PassScanner(tier=2))  # Tier 2 passes
+        f.add(TrackingPassScanner(tier=3))
+        await f.filter("test", metadata={"source_risk": "low"})
+        assert tier3_ran is False
+
+    async def test_tier3_runs_on_high_risk(self):
+        """Tier 3 runs when source_risk is 'high' even if Tier 2 passes."""
+        tier3_ran = False
+
+        class TrackingPassScanner(PassScanner):
+            async def scan(self, content, metadata=None):
+                nonlocal tier3_ran
+                tier3_ran = True
+                return await super().scan(content, metadata)
+
+        f = InputFilter()
+        f.add(PassScanner(tier=2))  # Tier 2 passes
+        f.add(TrackingPassScanner(tier=3))
+        await f.filter("test", metadata={"source_risk": "high"})
+        assert tier3_ran is True
+
+    async def test_tier3_runs_on_unknown_risk(self):
+        """Tier 3 runs when source_risk is 'unknown' even if Tier 2 passes."""
+        tier3_ran = False
+
+        class TrackingPassScanner(PassScanner):
+            async def scan(self, content, metadata=None):
+                nonlocal tier3_ran
+                tier3_ran = True
+                return await super().scan(content, metadata)
+
+        f = InputFilter()
+        f.add(PassScanner(tier=2))
+        f.add(TrackingPassScanner(tier=3))
+        await f.filter("test", metadata={"source_risk": "unknown"})
+        assert tier3_ran is True
+
+    async def test_output_filter_always_runs_tier3(self):
+        """OutputFilter always runs Tier 3 regardless of Tier 2 result."""
+        tier3_ran = False
+
+        class TrackingPassScanner(PassScanner):
+            async def scan(self, content, metadata=None):
+                nonlocal tier3_ran
+                tier3_ran = True
+                return await super().scan(content, metadata)
+
+        f = OutputFilter()
+        f.add(PassScanner(tier=2))
+        f.add(TrackingPassScanner(tier=3))
+        await f.filter("safe content")
+        assert tier3_ran is True
 
 
 # ---------------------------------------------------------------------------

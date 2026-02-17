@@ -31,6 +31,14 @@ class PromptGuardScanner(Scanner):
         threshold_flag: float = 0.7,
         model_cache_dir: str | None = None,
     ) -> None:
+        """Initialize the Prompt Guard scanner.
+
+        Args:
+            threshold_block: Minimum threat score to BLOCK content (default: 0.9).
+            threshold_flag: Minimum threat score to FLAG content (default: 0.7).
+            model_cache_dir: Directory for caching the model. Falls back to
+                ``LLM_IO_GUARD_MODEL_DIR`` env var or ``~/.cache/llm_io_guard``.
+        """
         self._threshold_block = threshold_block
         self._threshold_flag = threshold_flag
         self._model_cache_dir = model_cache_dir or os.environ.get(
@@ -65,10 +73,10 @@ class PromptGuardScanner(Scanner):
 
             logger.info("loading_prompt_guard", model=model_name)
 
-            self._tokenizer = AutoTokenizer.from_pretrained(
+            self._tokenizer = AutoTokenizer.from_pretrained(  # nosec B615 - revision pinned
                 model_name, cache_dir=cache_dir, revision=model_revision
             )
-            model = AutoModelForSequenceClassification.from_pretrained(
+            model = AutoModelForSequenceClassification.from_pretrained(  # nosec B615 - revision pinned
                 model_name, cache_dir=cache_dir, revision=model_revision
             )
             model.eval()
@@ -143,8 +151,8 @@ class PromptGuardScanner(Scanner):
 
     def _classify_chunk(self, text: str) -> tuple[float, float]:
         """Classify a single text chunk."""
-        assert self._tokenizer is not None  # noqa: S101
-        assert self._model is not None  # noqa: S101
+        assert self._tokenizer is not None  # noqa: S101  # nosec B101
+        assert self._model is not None  # noqa: S101  # nosec B101
         inputs = self._tokenizer(
             text,
             return_tensors="pt",
@@ -161,7 +169,7 @@ class PromptGuardScanner(Scanner):
 
     def _chunk_text(self, text: str, max_tokens: int = 512, overlap: int = 50) -> list[str]:
         """Split text into overlapping chunks for the model's token limit."""
-        assert self._tokenizer is not None  # noqa: S101
+        assert self._tokenizer is not None  # noqa: S101  # nosec B101
         tokens = self._tokenizer.encode(text, add_special_tokens=False)
 
         if len(tokens) <= max_tokens:
