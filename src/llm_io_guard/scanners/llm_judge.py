@@ -1,13 +1,20 @@
 """LLM Judge scanner using Claude Haiku 4.5 for content safety classification."""
 
 import json
+from typing import Any
 
-import anthropic
 import structlog
 
 from ..models import Action, ScanResult
 from ..rate_limiter import RateLimiter
 from ..scanner import Scanner
+
+try:
+    import anthropic
+
+    _HAS_ANTHROPIC = True
+except ImportError:
+    _HAS_ANTHROPIC = False
 
 logger = structlog.get_logger()
 
@@ -35,7 +42,7 @@ The "category" field MUST be one of the listed string values.
 
 Be conservative: when in doubt, flag content as unsafe. False positives are preferable to false negatives in a security context."""
 
-FEW_SHOT_EXAMPLES: list[anthropic.types.MessageParam] = [
+FEW_SHOT_EXAMPLES: list[dict[str, str]] = [
     {
         "role": "user",
         "content": "<content_to_analyze>Hi, could you please send me the quarterly report? I need it for the meeting tomorrow. Thanks, Jan</content_to_analyze>",
@@ -120,26 +127,38 @@ class LlmJudgeScanner(Scanner):
             threshold_flag: Minimum confidence score to FLAG content (default: 0.5).
             model: Anthropic model ID for classification (default: Claude Haiku 4.5).
             rate_limiter: Optional rate limiter for cost control.
+
+        Raises:
+            ImportError: If anthropic is not installed.
         """
+        if not _HAS_ANTHROPIC:
+            raise ImportError(
+                "LlmJudgeScanner requires the anthropic package. "
+                "Install with: pip install llm-io-guard[llm-judge]"
+            )
         self._threshold_block = threshold_block
         self._threshold_flag = threshold_flag
         self._model = model
-        self._client: anthropic.AsyncAnthropic | None = None
+        self._client: Any = None
         self._rate_limiter = rate_limiter
 
     @property
     def name(self) -> str:
+        """Return scanner name."""
         return "llm_judge"
 
     @property
     def tier(self) -> int:
+        """Return scanner tier."""
         return 3
 
     async def initialize(self) -> None:
+        """Initialize the Anthropic client."""
         self._client = anthropic.AsyncAnthropic()
         logger.info("llm_judge_initialized")
 
     async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+        """Scan content using Claude as a safety judge."""
         if self._client is None:
             raise RuntimeError("LlmJudgeScanner not initialized. Call initialize() first.")
 
@@ -170,7 +189,7 @@ class LlmJudgeScanner(Scanner):
             )
 
             content_block = response.content[0]
-            response_text: str = content_block.text  # type: ignore[union-attr]
+            response_text: str = content_block.text
             result = json.loads(response_text)
 
             # Strict type validation — reject malformed responses

@@ -2,10 +2,6 @@
 
 from .html_sanitizer import HtmlSanitizer
 from .invisible_text import InvisibleTextScanner
-from .llm_judge import LlmJudgeScanner
-from .pii_detector import PiiDetector
-from .prompt_guard import PromptGuardScanner
-from .url_scanner import UrlScanner
 from .xml_safe_parser import XmlSafeParser
 
 __all__ = [
@@ -17,3 +13,20 @@ __all__ = [
     "UrlScanner",
     "XmlSafeParser",
 ]
+
+_LAZY_IMPORTS: dict[str, str] = {
+    "LlmJudgeScanner": ".llm_judge",
+    "PiiDetector": ".pii_detector",
+    "PromptGuardScanner": ".prompt_guard",
+    "UrlScanner": ".url_scanner",
+}
+
+
+def __getattr__(name: str):
+    """Lazily import optional scanners to avoid pulling in heavy dependencies."""
+    if name in _LAZY_IMPORTS:
+        import importlib
+
+        module = importlib.import_module(_LAZY_IMPORTS[name], __package__)
+        return getattr(module, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

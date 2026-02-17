@@ -24,31 +24,36 @@ Without a content safety pipeline, a single prompt injection in an incoming emai
 ## Quick Start
 
 ```python
-from llm_io_guard import ContentSafetyPipeline, PipelineConfig
+from llm_io_guard import InputFilter, OutputFilter, Action
+from llm_io_guard.scanners.invisible_text import InvisibleTextScanner
+from llm_io_guard.scanners.html_sanitizer import HtmlSanitizer
 
-# Create pipeline with default config
-config = PipelineConfig.from_yaml("config/default.yaml")
-pipeline = ContentSafetyPipeline(config)
-await pipeline.initialize()
+# Build an input filter with Tier 1 scanners (no heavy dependencies)
+input_filter = InputFilter()
+input_filter.add(InvisibleTextScanner())
+input_filter.add(HtmlSanitizer())
 
 # Scan incoming email content
-result = await pipeline.scan(
-    content=email_body,
-    metadata={"source": "email", "sender": "unknown@example.com"},
-    direction="input",
-)
+result = await input_filter.filter(email_body)
 
 if result.is_safe:
     # Process the sanitized content
-    process(result.sanitized_content)
+    llm_response = await call_llm(result.text)
 elif result.action == Action.FLAG:
     # Content flagged -- proceed with caution
     log_warning(result.flagged_by)
-    process_with_caution(result.sanitized_content)
 else:
     # Content blocked
     log_block(result.blocked_by)
     reject(result)
+
+# Build an output filter for PII redaction (requires: pip install llm-io-guard[pii])
+from llm_io_guard.scanners.pii_detector import PiiDetector
+
+output_filter = OutputFilter()
+output_filter.add(PiiDetector())
+
+result = await output_filter.filter(llm_response)
 ```
 
 ## Architecture
@@ -107,16 +112,34 @@ Total pipeline latency target: **<600ms** (worst case, with Tier 3). Typical cas
 ## Installation
 
 ```bash
-# Install the package
+# Core package -- Tier 1 scanners only (~5MB, no ML dependencies)
 pip install llm-io-guard
 
-# Or install from source with uv
-uv sync --all-extras
+# With Prompt Guard 2 ML model (~2GB, requires torch)
+pip install llm-io-guard[ml]
 
-# Download required spaCy model for Dutch NER
+# With PII detection (Presidio + spaCy)
+pip install llm-io-guard[pii]
+
+# With LLM Judge (Anthropic Claude)
+pip install llm-io-guard[llm-judge]
+
+# With URL scanning (Google Safe Browsing)
+pip install llm-io-guard[url]
+
+# Everything
+pip install llm-io-guard[all]
+```
+
+If using the PII detector, also download the required spaCy models:
+```bash
 python -m spacy download nl_core_news_lg
+python -m spacy download en_core_web_lg
+```
 
-# Prompt Guard 2 is downloaded automatically on first use
+Install from source for development:
+```bash
+uv sync --all-extras
 ```
 
 ## Scanners
@@ -131,41 +154,18 @@ python -m spacy download nl_core_news_lg
 | `UrlScanner` | 2 | Google Safe Browsing API + homoglyph detection for phishing URLs | LLM01, LLM02 |
 | `LlmJudgeScanner` | 3 | Claude Haiku 4.5 content safety classifier for high-risk sources | LLM01, LLM07, LLM09 |
 
-## Configuration Reference
+## Configuration
 
-Full reference for `config/default.yaml`:
+Scanners are configured via constructor keyword arguments:
 
-```yaml
-# config/default.yaml -- full reference
-log_level: INFO                    # DEBUG, INFO, WARNING, ERROR
-max_content_length: 100000         # Maximum input length in characters
+```python
+from llm_io_guard.scanners.prompt_guard import PromptGuardScanner
+from llm_io_guard.scanners.pii_detector import PiiDetector
+from llm_io_guard.scanners.llm_judge import LlmJudgeScanner
 
-scanners:
-  invisible_text:
-    enabled: true                  # Strip invisible Unicode characters
-  html_sanitizer:
-    enabled: true                  # Strip HTML to plain text
-  xml_safe_parser:
-    enabled: true                  # Prevent XXE attacks
-  prompt_guard:
-    enabled: true
-    threshold_block: 0.9           # Block above this confidence
-    threshold_flag: 0.7            # Flag above this confidence
-  pii_detector:
-    enabled: true
-    threshold_block: 0.9           # Block above this PII confidence
-    threshold_flag: 0.7            # Flag above this PII confidence
-  url_scanner:
-    enabled: true
-  llm_judge:
-    enabled: true
-    threshold_block: 0.8           # Block above this judge confidence
-    threshold_flag: 0.5            # Flag above this judge confidence
-
-tier3_sources:                     # Sources that trigger Tier 3 (LLM judge)
-  - email
-  - web
-  - unknown
+PromptGuardScanner(threshold_block=0.9, threshold_flag=0.7)
+PiiDetector(threshold_block=0.9, threshold_flag=0.7)
+LlmJudgeScanner(threshold_block=0.8, threshold_flag=0.5, model="claude-haiku-4-5-20251001")
 ```
 
 ### Environment Variables
@@ -258,24 +258,16 @@ make clean
 
 ## API Reference
 
-### `ContentSafetyPipeline`
-Main pipeline class. Orchestrates tiered scanning with fail-fast behavior.
-- `__init__(config: PipelineConfig)` -- create a pipeline from configuration
-- `register_scanner(scanner: Scanner)` -- register a scanner in the appropriate tier
-- `async initialize()` -- initialize all registered scanners (load models, etc.)
-- `async scan(content, metadata, direction)` -- run content through the tiered pipeline
-
-### `PipelineConfig`
-Configuration class backed by Pydantic.
-- `from_yaml(path)` -- load configuration from a YAML file
-- `from_env()` -- load configuration from environment variables
-- `is_scanner_enabled(name)` -- check if a scanner is enabled
-- `get_scanner_config(name)` -- get scanner-specific configuration
+### `InputFilter` / `OutputFilter`
+Builder-pattern filter classes. Orchestrate tiered scanning with fail-fast behavior.
+- `add(scanner: Scanner)` -- register a scanner (validates direction compatibility)
+- `async filter(content: str) -> FilterResult` -- run content through the tiered pipeline
 
 ### `Scanner`
 Abstract base class for all content scanners. Extend this to add custom scanners.
 - `name: str` -- unique identifier (abstract property)
 - `tier: int` -- execution tier 1/2/3 (abstract property)
+- `supported_directions: frozenset[str]` -- `"input"`, `"output"`, or both
 - `async scan(content, metadata) -> ScanResult` -- perform the scan (abstract)
 - `async initialize()` -- optional async initialization
 
@@ -283,11 +275,7 @@ Abstract base class for all content scanners. Extend this to add custom scanners
 - `Action` -- enum: `PASS`, `FLAG`, `BLOCK`
 - `ScanResult` -- result from a single scanner (scanner_name, action, confidence, description, details)
 - `FilterResult` -- aggregated pipeline result with `is_safe`, `blocked_by`, `flagged_by` properties
-- `ScannerConfig` -- per-scanner configuration (enabled, threshold_block, threshold_flag)
-
-### Integration Helpers
-- `async safe_fetch_email(pipeline, email_body, sender, subject, ...)` -- scan email content with appropriate metadata
-- `async safe_fetch_webpage(pipeline, url, html_content)` -- scan web page content with appropriate metadata
+- `ContentBlocked` -- exception raised when `on_block="raise"` mode is used
 
 ### Action Validation
 - `ActionRequest` -- represents an agent action request with category and risk level

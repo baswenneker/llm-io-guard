@@ -3,18 +3,26 @@
 import asyncio
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import structlog
-import torch
-from transformers import (
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
-    PreTrainedModel,
-    PreTrainedTokenizerBase,
-)
 
 from ..models import Action, ScanResult
 from ..scanner import Scanner
+
+try:
+    import torch
+    from transformers import (
+        AutoModelForSequenceClassification,
+        AutoTokenizer,
+    )
+
+    _HAS_ML_DEPS = True
+except ImportError:
+    _HAS_ML_DEPS = False
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 logger = structlog.get_logger()
 
@@ -38,7 +46,15 @@ class PromptGuardScanner(Scanner):
             threshold_flag: Minimum threat score to FLAG content (default: 0.7).
             model_cache_dir: Directory for caching the model. Falls back to
                 ``LLM_IO_GUARD_MODEL_DIR`` env var or ``~/.cache/llm_io_guard``.
+
+        Raises:
+            ImportError: If torch/transformers are not installed.
         """
+        if not _HAS_ML_DEPS:
+            raise ImportError(
+                "PromptGuardScanner requires torch and transformers. "
+                "Install with: pip install llm-io-guard[ml]"
+            )
         self._threshold_block = threshold_block
         self._threshold_flag = threshold_flag
         self._model_cache_dir = model_cache_dir or os.environ.get(

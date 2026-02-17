@@ -1,4 +1,4 @@
-.PHONY: help install test test-serial test-cov fmt lint type docs clean dev install-spec-kit install-gsd update-gsd
+.PHONY: help install test test-serial test-cov fmt lint type docs clean dev build publish-test publish clean-dist
 
 help:  ## Show this help message
 	@echo "Usage: make [target]"
@@ -46,3 +46,15 @@ dev:  ## Install and run development checks
 	$(MAKE) lint
 	$(MAKE) docs
 	$(MAKE) test
+
+build:  ## Build sdist and wheel
+	uv run python -m build
+
+publish-test:  ## Upload to TestPyPI
+	uv run twine upload --repository testpypi dist/*
+
+publish:  ## Upload to PyPI
+	uv run twine upload dist/*
+
+clean-dist:  ## Clean build artifacts
+	rm -rf dist/ build/ src/*.egg-info

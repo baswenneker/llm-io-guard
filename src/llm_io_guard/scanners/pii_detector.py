@@ -3,18 +3,24 @@
 import asyncio
 
 import structlog
-from presidio_analyzer import (
-    AnalyzerEngine,
-    Pattern,
-    PatternRecognizer,
-    RecognizerRegistry,
-    RecognizerResult,
-)
-from presidio_analyzer.nlp_engine import SpacyNlpEngine
-from presidio_anonymizer import AnonymizerEngine
 
 from ..models import Action, ScanResult
 from ..scanner import Scanner
+
+try:
+    from presidio_analyzer import (
+        AnalyzerEngine,
+        Pattern,
+        PatternRecognizer,
+        RecognizerRegistry,
+        RecognizerResult,
+    )
+    from presidio_analyzer.nlp_engine import SpacyNlpEngine
+    from presidio_anonymizer import AnonymizerEngine
+
+    _HAS_PII_DEPS = True
+except ImportError:
+    _HAS_PII_DEPS = False
 
 logger = structlog.get_logger()
 
@@ -25,119 +31,118 @@ SECRET_ENTITY_TYPES = {
 }
 
 
-class BsnRecognizer(PatternRecognizer):
-    """Dutch BSN (burgerservicenummer) recognizer with 11-proef validation."""
+if _HAS_PII_DEPS:
 
-    def __init__(self) -> None:
-        """Initialize with BSN digit patterns."""
-        patterns = [
-            Pattern(
-                name="bsn_pattern",
-                regex=r"\b(\d{9})\b",
-                score=0.3,
-            ),
-            Pattern(
-                name="bsn_with_dots",
-                regex=r"\b(\d{3}\.\d{2}\.\d{4})\b",
-                score=0.5,
-            ),
-        ]
-        super().__init__(
-            supported_entity="NL_BSN",
-            supported_language="nl",
-            patterns=patterns,
-            context=["bsn", "burgerservicenummer", "sofinummer", "sofi"],
-        )
+    class BsnRecognizer(PatternRecognizer):
+        """Dutch BSN (burgerservicenummer) recognizer with 11-proef validation."""
 
-    def validate_result(self, pattern_text: str) -> bool:
-        """Validate BSN using the 11-proef checksum."""
-        digits = pattern_text.replace(".", "")
-        if len(digits) != 9 or not digits.isdigit():
-            return False
-        total = sum((9 - i) * int(d) if i < 8 else -1 * int(d) for i, d in enumerate(digits))
-        return total % 11 == 0 and total != 0
+        def __init__(self) -> None:
+            """Initialize with BSN digit patterns."""
+            patterns = [
+                Pattern(
+                    name="bsn_pattern",
+                    regex=r"\b(\d{9})\b",
+                    score=0.3,
+                ),
+                Pattern(
+                    name="bsn_with_dots",
+                    regex=r"\b(\d{3}\.\d{2}\.\d{4})\b",
+                    score=0.5,
+                ),
+            ]
+            super().__init__(
+                supported_entity="NL_BSN",
+                supported_language="nl",
+                patterns=patterns,
+                context=["bsn", "burgerservicenummer", "sofinummer", "sofi"],
+            )
 
+        def validate_result(self, pattern_text: str) -> bool:
+            """Validate BSN using the 11-proef checksum."""
+            digits = pattern_text.replace(".", "")
+            if len(digits) != 9 or not digits.isdigit():
+                return False
+            total = sum((9 - i) * int(d) if i < 8 else -1 * int(d) for i, d in enumerate(digits))
+            return total % 11 == 0 and total != 0
 
-class DutchPhoneRecognizer(PatternRecognizer):
-    """Dutch phone number recognizer."""
+    class DutchPhoneRecognizer(PatternRecognizer):
+        """Dutch phone number recognizer."""
 
-    def __init__(self) -> None:
-        """Initialize with Dutch phone number patterns."""
-        patterns = [
-            Pattern(
-                name="nl_phone_international",
-                regex=r"\+31\s?[1-9][\s.-]?\d{1,3}[\s.-]?\d{4,7}",
-                score=0.7,
-            ),
-            Pattern(
-                name="nl_phone_national",
-                regex=r"0[1-9][\s.-]?\d{1,3}[\s.-]?\d{4,7}",
-                score=0.4,
-            ),
-        ]
-        super().__init__(
-            supported_entity="NL_PHONE",
-            supported_language="nl",
-            patterns=patterns,
-            context=["telefoon", "telefoonnummer", "bel", "mobiel", "phone", "tel"],
-        )
+        def __init__(self) -> None:
+            """Initialize with Dutch phone number patterns."""
+            patterns = [
+                Pattern(
+                    name="nl_phone_international",
+                    regex=r"\+31\s?[1-9][\s.-]?\d{1,3}[\s.-]?\d{4,7}",
+                    score=0.7,
+                ),
+                Pattern(
+                    name="nl_phone_national",
+                    regex=r"0[1-9][\s.-]?\d{1,3}[\s.-]?\d{4,7}",
+                    score=0.4,
+                ),
+            ]
+            super().__init__(
+                supported_entity="NL_PHONE",
+                supported_language="nl",
+                patterns=patterns,
+                context=["telefoon", "telefoonnummer", "bel", "mobiel", "phone", "tel"],
+            )
 
+    class DutchPostalCodeRecognizer(PatternRecognizer):
+        """Dutch postal code recognizer (4 digits + 2 letters)."""
 
-class DutchPostalCodeRecognizer(PatternRecognizer):
-    """Dutch postal code recognizer (4 digits + 2 letters)."""
+        def __init__(self) -> None:
+            """Initialize with Dutch postal code pattern."""
+            patterns = [
+                Pattern(
+                    name="nl_postal_code",
+                    regex=r"\b[1-9]\d{3}\s?[A-Z]{2}\b",
+                    score=0.6,
+                ),
+            ]
+            super().__init__(
+                supported_entity="NL_POSTAL_CODE",
+                supported_language="nl",
+                patterns=patterns,
+                context=["postcode", "adres", "woonplaats", "postal"],
+            )
 
-    def __init__(self) -> None:
-        """Initialize with Dutch postal code pattern."""
-        patterns = [
-            Pattern(
-                name="nl_postal_code",
-                regex=r"\b[1-9]\d{3}\s?[A-Z]{2}\b",
-                score=0.6,
-            ),
-        ]
-        super().__init__(
-            supported_entity="NL_POSTAL_CODE",
-            supported_language="nl",
-            patterns=patterns,
-            context=["postcode", "adres", "woonplaats", "postal"],
-        )
+    class SecretRecognizer(PatternRecognizer):
+        """Detects API keys, tokens, and other secrets."""
 
-
-class SecretRecognizer(PatternRecognizer):
-    """Detects API keys, tokens, and other secrets."""
-
-    def __init__(self) -> None:
-        """Initialize with secret detection patterns."""
-        patterns = [
-            Pattern(name="openai_key", regex=r"sk-[a-zA-Z0-9]{20,}", score=0.95),
-            Pattern(name="anthropic_key", regex=r"sk-ant-[a-zA-Z0-9\-]{20,}", score=0.95),
-            Pattern(name="github_pat", regex=r"ghp_[a-zA-Z0-9]{36,}", score=0.95),
-            Pattern(name="github_fine", regex=r"github_pat_[a-zA-Z0-9_]{20,}", score=0.95),
-            Pattern(name="slack_bot", regex=r"xoxb-[a-zA-Z0-9-]+", score=0.90),
-            Pattern(name="slack_user", regex=r"xoxp-[a-zA-Z0-9-]+", score=0.90),
-            Pattern(name="aws_key", regex=r"AKIA[0-9A-Z]{16}", score=0.95),
-            Pattern(
-                name="bearer_token",
-                regex=r"Bearer\s+[a-zA-Z0-9\-._~+/]+=*",
-                score=0.80,
-            ),
-            Pattern(
-                name="pem_key",
-                regex=r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----",
-                score=0.99,
-            ),
-            Pattern(
-                name="generic_secret",
-                regex=r"(?:key|secret|token|password|passwd|pwd)\s*[=:]\s*['\"]?[a-zA-Z0-9+/]{40,}['\"]?",
-                score=0.70,
-            ),
-        ]
-        super().__init__(
-            supported_entity="SECRET_API_KEY",
-            supported_language="en",
-            patterns=patterns,
-            context=["api", "key", "secret", "token", "credential", "auth"],
-        )
+        def __init__(self) -> None:
+            """Initialize with secret detection patterns."""
+            patterns = [
+                Pattern(name="openai_key", regex=r"sk-[a-zA-Z0-9]{20,}", score=0.95),
+                Pattern(name="anthropic_key", regex=r"sk-ant-[a-zA-Z0-9\-]{20,}", score=0.95),
+                Pattern(name="github_pat", regex=r"ghp_[a-zA-Z0-9]{36,}", score=0.95),
+                Pattern(name="github_fine", regex=r"github_pat_[a-zA-Z0-9_]{20,}", score=0.95),
+                Pattern(name="slack_bot", regex=r"xoxb-[a-zA-Z0-9-]+", score=0.90),
+                Pattern(name="slack_user", regex=r"xoxp-[a-zA-Z0-9-]+", score=0.90),
+                Pattern(name="aws_key", regex=r"AKIA[0-9A-Z]{16}", score=0.95),
+                Pattern(
+                    name="bearer_token",
+                    regex=r"Bearer\s+[a-zA-Z0-9\-._~+/]+=*",
+                    score=0.80,
+                ),
+                Pattern(
+                    name="pem_key",
+                    regex=r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----",
+                    score=0.99,
+                ),
+                Pattern(
+                    name="generic_secret",
+                    regex=r"(?:key|secret|token|password|passwd|pwd)\s*[=:]\s*['\"]?[a-zA-Z0-9+/]{40,}['\"]?",
+                    score=0.70,
+                ),
+            ]
+            super().__init__(
+                supported_entity="SECRET_API_KEY",
+                supported_language="en",
+                patterns=patterns,
+                context=["api", "key", "secret", "token", "credential", "auth"],
+            )
 
 
 class PiiDetector(Scanner):
@@ -156,7 +161,15 @@ class PiiDetector(Scanner):
                 Applied to secret detection (API keys, tokens, etc.).
             threshold_flag: Minimum confidence score to FLAG PII (default: 0.7).
                 PII above this threshold is flagged and optionally redacted on output.
+
+        Raises:
+            ImportError: If presidio-analyzer/presidio-anonymizer are not installed.
         """
+        if not _HAS_PII_DEPS:
+            raise ImportError(
+                "PiiDetector requires presidio-analyzer and presidio-anonymizer. "
+                "Install with: pip install llm-io-guard[pii]"
+            )
         self._threshold_block = threshold_block
         self._threshold_flag = threshold_flag
         self._analyzer: AnalyzerEngine | None = None
@@ -165,10 +178,12 @@ class PiiDetector(Scanner):
 
     @property
     def name(self) -> str:
+        """Return scanner name."""
         return "pii_detector"
 
     @property
     def tier(self) -> int:
+        """Return scanner tier."""
         return 2
 
     @property
@@ -206,6 +221,7 @@ class PiiDetector(Scanner):
             logger.info("pii_detector_initialized")
 
     async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+        """Scan content for PII and secrets."""
         if self._analyzer is None or self._anonymizer is None:
             raise RuntimeError("PiiDetector not initialized. Call initialize() first.")
 
