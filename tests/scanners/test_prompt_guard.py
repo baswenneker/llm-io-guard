@@ -185,7 +185,9 @@ async def test_max_score_across_chunks(scanner, mock_model, mock_tokenizer):
 
 @patch("llm_io_guard.scanners.prompt_guard.AutoTokenizer.from_pretrained")
 @patch("llm_io_guard.scanners.prompt_guard.AutoModelForSequenceClassification.from_pretrained")
-async def test_initialize_singleton(mock_model_cls, mock_tok_cls, scanner, mock_model, mock_tokenizer):
+async def test_initialize_singleton(
+    mock_model_cls, mock_tok_cls, scanner, mock_model, mock_tokenizer
+):
     """Calling initialize() twice only loads model once."""
     mock_tok_cls.return_value = mock_tokenizer
     mock_model_cls.return_value = mock_model

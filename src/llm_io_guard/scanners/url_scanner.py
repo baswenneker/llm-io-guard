@@ -136,6 +136,8 @@ class UrlScanner(Scanner):
 
     async def _check_safe_browsing(self, urls: list[str]) -> list[dict]:
         """Check URLs against Google Safe Browsing API."""
+        if self._safe_browsing is None:
+            return []
         threats = []
         # pysafebrowsing supports batch lookup
         result = self._safe_browsing.lookup_urls(urls)

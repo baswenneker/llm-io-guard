@@ -39,12 +39,14 @@ def mock_anthropic_response():
     def make_response(safe: bool, confidence: float, category: str, explanation: str):
         response = MagicMock()
         content_block = MagicMock()
-        content_block.text = json.dumps({
-            "safe": safe,
-            "confidence": confidence,
-            "category": category,
-            "explanation": explanation,
-        })
+        content_block.text = json.dumps(
+            {
+                "safe": safe,
+                "confidence": confidence,
+                "category": category,
+                "explanation": explanation,
+            }
+        )
         response.content = [content_block]
         return response
 

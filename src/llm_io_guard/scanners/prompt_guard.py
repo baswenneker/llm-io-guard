@@ -1,5 +1,7 @@
 """Prompt injection detection using Meta Prompt Guard 2."""
 
+from typing import Any
+
 import structlog
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -18,8 +20,8 @@ class PromptGuardScanner(Scanner):
 
     def __init__(self, config: PipelineConfig):
         self._config = config
-        self._model = None
-        self._tokenizer = None
+        self._model: Any = None
+        self._tokenizer: Any = None
 
     @property
     def name(self) -> str:

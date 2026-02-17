@@ -31,9 +31,7 @@ class TestExtractUrls:
         assert urls == []
 
     def test_extract_mixed(self):
-        content = (
-            'Check https://plain.com and <a href="https://html.com/page">link</a> for info.'
-        )
+        content = 'Check https://plain.com and <a href="https://html.com/page">link</a> for info.'
         urls = extract_urls(content)
         assert "https://plain.com" in urls
         assert "https://html.com/page" in urls
@@ -118,9 +116,7 @@ class TestUrlScanner:
         }
         scanner._safe_browsing = mock_sb
 
-        result = await scanner.scan(
-            "Visit https://safe.com and https://also-safe.com for info."
-        )
+        result = await scanner.scan("Visit https://safe.com and https://also-safe.com for info.")
         assert result.action == Action.PASS
         assert result.details["urls_scanned"] == 2
         mock_sb.lookup_urls.assert_called_once()
@@ -147,7 +143,7 @@ class TestHomoglyphDetection:
 
     def test_greek_omicron_detected(self, scanner):
         # Greek 'ο' (U+03BF) in "gοοgle.com"
-        result = scanner._check_homoglyphs("https://g\u03BF\u03BFgle.com")
+        result = scanner._check_homoglyphs("https://g\u03bf\u03bfgle.com")
         assert result is not None
         assert result["type"] == "homoglyph"
 

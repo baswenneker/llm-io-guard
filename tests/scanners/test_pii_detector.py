@@ -149,9 +149,7 @@ class TestPiiDetector:
         mock_anon_cls.return_value = MagicMock()
 
         await self.detector.initialize()
-        result = await self.detector.scan(
-            "Jan de Vries is here", metadata={"direction": "input"}
-        )
+        result = await self.detector.scan("Jan de Vries is here", metadata={"direction": "input"})
 
         assert result.action == Action.FLAG
         assert result.details["redacted"] is False
@@ -176,9 +174,7 @@ class TestPiiDetector:
         mock_anon_cls.return_value = mock_anonymizer
 
         await self.detector.initialize()
-        result = await self.detector.scan(
-            "Jan de Vries is here", metadata={"direction": "output"}
-        )
+        result = await self.detector.scan("Jan de Vries is here", metadata={"direction": "output"})
 
         assert result.action == Action.FLAG
         assert result.details["redacted"] is True

@@ -46,9 +46,7 @@ class BsnRecognizer(PatternRecognizer):
         digits = pattern_text.replace(".", "")
         if len(digits) != 9:
             return False
-        total = sum(
-            (9 - i) * int(d) if i < 8 else -1 * int(d) for i, d in enumerate(digits)
-        )
+        total = sum((9 - i) * int(d) if i < 8 else -1 * int(d) for i, d in enumerate(digits))
         return total % 11 == 0 and total != 0
 
 
@@ -103,9 +101,7 @@ class SecretRecognizer(PatternRecognizer):
             Pattern(name="openai_key", regex=r"sk-[a-zA-Z0-9]{20,}", score=0.95),
             Pattern(name="anthropic_key", regex=r"sk-ant-[a-zA-Z0-9\-]{20,}", score=0.95),
             Pattern(name="github_pat", regex=r"ghp_[a-zA-Z0-9]{36,}", score=0.95),
-            Pattern(
-                name="github_fine", regex=r"github_pat_[a-zA-Z0-9_]{20,}", score=0.95
-            ),
+            Pattern(name="github_fine", regex=r"github_pat_[a-zA-Z0-9_]{20,}", score=0.95),
             Pattern(name="slack_bot", regex=r"xoxb-[a-zA-Z0-9-]+", score=0.90),
             Pattern(name="slack_user", regex=r"xoxp-[a-zA-Z0-9-]+", score=0.90),
             Pattern(name="aws_key", regex=r"AKIA[0-9A-Z]{16}", score=0.95),
@@ -178,7 +174,7 @@ class PiiDetector(Scanner):
         logger.info("pii_detector_initialized")
 
     async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
-        if self._analyzer is None:
+        if self._analyzer is None or self._anonymizer is None:
             raise RuntimeError("PiiDetector not initialized. Call initialize() first.")
 
         direction = (metadata or {}).get("direction", "input")
@@ -263,8 +259,7 @@ class PiiDetector(Scanner):
         merged = []
         for result in all_results:
             if not any(
-                existing.start <= result.start and existing.end >= result.end
-                for existing in merged
+                existing.start <= result.start and existing.end >= result.end for existing in merged
             ):
                 merged.append(result)
         return merged
