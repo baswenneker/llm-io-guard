@@ -9,6 +9,7 @@ authors = [
     {name = "Bas Wenneker", email = "bas@headingfwd.com"},
 ]
 dependencies = [
+    "anthropic>=0.40.0",
     "structlog>=24.0.0",
     "pydantic>=2.5,<3",
     "pyyaml>=6.0,<7",
