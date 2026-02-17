@@ -1,8 +1,11 @@
 """Tests for PromptGuardScanner."""
 
+import pytest
+
+pytest.importorskip("torch")
+
 from unittest.mock import MagicMock, patch
 
-import pytest
 import torch
 
 from llm_io_guard.models import Action
@@ -184,3 +187,13 @@ async def test_initialize_singleton(
 
     mock_tok_cls.assert_called_once()
     mock_model_cls.assert_called_once()
+
+
+class TestImportGuard:
+    def test_raises_without_deps(self):
+        """PromptGuardScanner() raises ImportError when ML deps are missing."""
+        with (
+            patch("llm_io_guard.scanners.prompt_guard._HAS_ML_DEPS", False),
+            pytest.raises(ImportError, match="pip install llm-io-guard\\[ml\\]"),
+        ):
+            PromptGuardScanner()

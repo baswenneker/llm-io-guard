@@ -1,10 +1,14 @@
 """Tests for the LLM Judge scanner."""
 
+import pytest
+
+pytest.importorskip("anthropic")
+
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import anthropic
-import pytest
+from anthropic.types import TextBlock
 
 from llm_io_guard.models import Action
 from llm_io_guard.scanners.llm_judge import (
@@ -25,7 +29,7 @@ def mock_anthropic_response():
 
     def make_response(safe: bool, confidence: float, category: str, explanation: str):
         response = MagicMock()
-        content_block = MagicMock()
+        content_block = MagicMock(spec=TextBlock)
         content_block.text = json.dumps(
             {
                 "safe": safe,
@@ -104,7 +108,7 @@ async def test_unsafe_moderate_flagged(scanner, mock_anthropic_response):
 async def test_json_parse_error(scanner):
     """Mock returns invalid JSON, scanner returns Action.BLOCK (fail-closed)."""
     response = MagicMock()
-    content_block = MagicMock()
+    content_block = MagicMock(spec=TextBlock)
     content_block.text = "not valid json {{{{"
     response.content = [content_block]
 
@@ -247,7 +251,7 @@ async def test_non_text_block_response(scanner):
 async def test_invalid_safe_type_blocks(scanner):
     """Response with 'safe' as string instead of bool triggers validation error → BLOCK."""
     response = MagicMock()
-    content_block = MagicMock()
+    content_block = MagicMock(spec=TextBlock)
     content_block.text = json.dumps(
         {"safe": "true", "confidence": 0.9, "category": "none", "explanation": "test"}
     )
@@ -264,7 +268,7 @@ async def test_invalid_safe_type_blocks(scanner):
 async def test_invalid_confidence_type_blocks(scanner):
     """Response with 'confidence' as string instead of number triggers validation error → BLOCK."""
     response = MagicMock()
-    content_block = MagicMock()
+    content_block = MagicMock(spec=TextBlock)
     content_block.text = json.dumps(
         {"safe": True, "confidence": "high", "category": "none", "explanation": "test"}
     )
@@ -282,3 +286,13 @@ async def test_scanner_properties(scanner):
     """Scanner name and tier are correct."""
     assert scanner.name == "llm_judge"
     assert scanner.tier == 3
+
+
+class TestImportGuard:
+    def test_raises_without_anthropic(self):
+        """LlmJudgeScanner() raises ImportError when anthropic is missing."""
+        with (
+            patch("llm_io_guard.scanners.llm_judge._HAS_ANTHROPIC", False),
+            pytest.raises(ImportError, match="pip install llm-io-guard\\[llm-judge\\]"),
+        ):
+            LlmJudgeScanner()

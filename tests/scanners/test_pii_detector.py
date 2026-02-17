@@ -1,9 +1,11 @@
 """Tests for the PII detector scanner."""
 
+import pytest
+
+pytest.importorskip("presidio_analyzer")
+
 import re
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from llm_io_guard.models import Action
 from llm_io_guard.scanners.pii_detector import (
@@ -217,3 +219,13 @@ class TestPiiDetector:
 
         assert result.action == Action.FLAG
         assert "PII detection error" in result.description
+
+
+class TestImportGuard:
+    def test_raises_without_pii_deps(self):
+        """PiiDetector() raises ImportError when presidio is missing."""
+        with (
+            patch("llm_io_guard.scanners.pii_detector._HAS_PII_DEPS", False),
+            pytest.raises(ImportError, match="pip install llm-io-guard\\[pii\\]"),
+        ):
+            PiiDetector()
