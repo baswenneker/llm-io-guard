@@ -19,6 +19,8 @@ dependencies = [
     "defusedxml>=0.7.0",
     "torch>=2.0.0",
     "transformers>=4.35.0",
+    "pysafebrowsing>=0.1.1",
+    "confusable-homoglyphs>=3.0.0",
 ]
 
 [project.optional-dependencies]
