@@ -22,11 +22,13 @@ _LAZY_IMPORTS: dict[str, str] = {
 }
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> type:
     """Lazily import optional scanners to avoid pulling in heavy dependencies."""
     if name in _LAZY_IMPORTS:
         import importlib
 
         module = importlib.import_module(_LAZY_IMPORTS[name], __package__)
-        return getattr(module, name)
+        obj = getattr(module, name)
+        globals()[name] = obj  # Cache for subsequent access
+        return obj
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
