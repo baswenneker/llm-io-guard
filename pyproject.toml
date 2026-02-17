@@ -76,6 +76,7 @@ markers = [
     "serial: marks tests as serial, often when accessing dbs or files that are not thread-safe (deselect with '-m \"not serial\"')",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "adversarial: adversarial test cases",
+    "benchmark: marks benchmark tests",
 ]
 
 [tool.pyright]

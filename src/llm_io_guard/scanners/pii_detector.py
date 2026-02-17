@@ -44,7 +44,7 @@ class BsnRecognizer(PatternRecognizer):
     def validate_result(self, pattern_text: str) -> bool:
         """Validate BSN using the 11-proef checksum."""
         digits = pattern_text.replace(".", "")
-        if len(digits) != 9:
+        if len(digits) != 9 or not digits.isdigit():
             return False
         total = sum((9 - i) * int(d) if i < 8 else -1 * int(d) for i, d in enumerate(digits))
         return total % 11 == 0 and total != 0
