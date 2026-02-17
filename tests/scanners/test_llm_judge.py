@@ -9,8 +9,8 @@ import pytest
 from llm_io_guard.config import PipelineConfig, ScannerConfig
 from llm_io_guard.models import Action
 from llm_io_guard.scanners.llm_judge import (
-    _MAX_CONTENT_LENGTH,
     FEW_SHOT_EXAMPLES,
+    MAX_CONTENT_LENGTH,
     LlmJudgeScanner,
 )
 
@@ -115,7 +115,7 @@ async def test_unsafe_moderate_flagged(scanner, mock_anthropic_response):
 
 
 async def test_json_parse_error(scanner):
-    """Mock returns invalid JSON, scanner returns Action.FLAG with 0.5 confidence."""
+    """Mock returns invalid JSON, scanner returns Action.BLOCK (fail-closed)."""
     response = MagicMock()
     content_block = MagicMock()
     content_block.text = "not valid json {{{{"
@@ -125,13 +125,13 @@ async def test_json_parse_error(scanner):
         mock_client.messages.create = AsyncMock(return_value=response)
         result = await scanner.scan("test content")
 
-    assert result.action == Action.FLAG
-    assert result.confidence == 0.5
-    assert "unparseable" in result.description
+    assert result.action == Action.BLOCK
+    assert result.confidence == 1.0
+    assert "fail-closed" in result.description
 
 
 async def test_api_error_handled(scanner):
-    """Mock raises anthropic.APIError, scanner returns Action.FLAG with 0.5 confidence."""
+    """Mock raises anthropic.APIError, scanner returns Action.BLOCK (fail-closed)."""
     with patch.object(scanner, "_client") as mock_client:
         mock_client.messages.create = AsyncMock(
             side_effect=anthropic.APIStatusError(
@@ -142,13 +142,13 @@ async def test_api_error_handled(scanner):
         )
         result = await scanner.scan("test content")
 
-    assert result.action == Action.FLAG
-    assert result.confidence == 0.5
-    assert "API error" in result.description
+    assert result.action == Action.BLOCK
+    assert result.confidence == 1.0
+    assert "fail-closed" in result.description
 
 
 async def test_content_truncation(scanner, mock_anthropic_response):
-    """Very long content is truncated to _MAX_CONTENT_LENGTH chars in the API call."""
+    """Very long content is truncated to MAX_CONTENT_LENGTH chars in the API call."""
     long_content = "A" * 20_000
 
     with patch.object(scanner, "_client") as mock_client:
@@ -166,7 +166,7 @@ async def test_content_truncation(scanner, mock_anthropic_response):
         user_message = call_args.kwargs["messages"][-1]["content"]
         # The prefix is "Content to analyze:\n\n", so the total length is prefix + truncated content
         content_portion = user_message.removeprefix("Content to analyze:\n\n")
-        assert len(content_portion) == _MAX_CONTENT_LENGTH
+        assert len(content_portion) == MAX_CONTENT_LENGTH
 
 
 async def test_few_shot_examples_included(scanner, mock_anthropic_response):

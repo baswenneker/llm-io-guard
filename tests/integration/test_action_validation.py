@@ -59,23 +59,23 @@ class TestActionRequestCreation:
         )
         assert action.requires_confirmation is True
 
-    def test_create_action_no_confirmation(self):
-        """CREATE actions should not require confirmation (not in REQUIRES_CONFIRMATION)."""
+    def test_create_action_requires_confirmation(self):
+        """CREATE actions should require confirmation."""
         action = ActionRequest(
             category=ActionCategory.CREATE,
             tool_name="create_record",
             description="Create new record",
         )
-        assert action.requires_confirmation is False
+        assert action.requires_confirmation is True
 
-    def test_modify_action_no_confirmation(self):
-        """MODIFY actions should not require confirmation."""
+    def test_modify_action_requires_confirmation(self):
+        """MODIFY actions should require confirmation."""
         action = ActionRequest(
             category=ActionCategory.MODIFY,
             tool_name="update_record",
             description="Update record field",
         )
-        assert action.requires_confirmation is False
+        assert action.requires_confirmation is True
 
 
 class TestValidateActionAutoAllowed:
@@ -180,27 +180,51 @@ class TestValidateActionWithConfirmation:
 
 
 class TestValidateActionMiddleTier:
-    """Test validate_action with CREATE/MODIFY categories (auto-allowed, not in AUTO_ALLOWED)."""
+    """Test validate_action with CREATE/MODIFY categories (require confirmation)."""
 
-    async def test_create_auto_allowed_without_callback(self):
-        """CREATE action should be auto-allowed even without callback."""
+    async def test_create_blocked_without_callback(self):
+        """CREATE action without callback should be blocked."""
         action = ActionRequest(
             category=ActionCategory.CREATE,
             tool_name="create_ticket",
             description="Create support ticket",
         )
         result = await validate_action(action)
-        assert result is True
+        assert result is False
 
-    async def test_modify_auto_allowed_without_callback(self):
-        """MODIFY action should be auto-allowed even without callback."""
+    async def test_modify_blocked_without_callback(self):
+        """MODIFY action without callback should be blocked."""
         action = ActionRequest(
             category=ActionCategory.MODIFY,
             tool_name="update_status",
             description="Update ticket status",
         )
         result = await validate_action(action)
+        assert result is False
+
+    async def test_create_approved_with_callback(self):
+        """CREATE action approved by callback should return True."""
+        callback = AsyncMock(return_value=True)
+        action = ActionRequest(
+            category=ActionCategory.CREATE,
+            tool_name="create_ticket",
+            description="Create support ticket",
+        )
+        result = await validate_action(action, confirm_callback=callback)
         assert result is True
+        callback.assert_called_once()
+
+    async def test_modify_approved_with_callback(self):
+        """MODIFY action approved by callback should return True."""
+        callback = AsyncMock(return_value=True)
+        action = ActionRequest(
+            category=ActionCategory.MODIFY,
+            tool_name="update_status",
+            description="Update ticket status",
+        )
+        result = await validate_action(action, confirm_callback=callback)
+        assert result is True
+        callback.assert_called_once()
 
 
 class TestActionCategoryConstants:
@@ -208,10 +232,13 @@ class TestActionCategoryConstants:
 
     def test_requires_confirmation_set(self):
         """Verify REQUIRES_CONFIRMATION contains the right categories."""
+        assert ActionCategory.CREATE in REQUIRES_CONFIRMATION
+        assert ActionCategory.MODIFY in REQUIRES_CONFIRMATION
         assert ActionCategory.DELETE in REQUIRES_CONFIRMATION
         assert ActionCategory.SEND in REQUIRES_CONFIRMATION
         assert ActionCategory.EXECUTE in REQUIRES_CONFIRMATION
         assert ActionCategory.READ not in REQUIRES_CONFIRMATION
+        assert ActionCategory.NOTIFY not in REQUIRES_CONFIRMATION
 
     def test_auto_allowed_set(self):
         """Verify AUTO_ALLOWED contains the right categories."""

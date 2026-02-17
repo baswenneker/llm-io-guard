@@ -1,7 +1,15 @@
 """PII and secret detection scanner using Microsoft Presidio."""
 
+import asyncio
+
 import structlog
-from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer, RecognizerRegistry
+from presidio_analyzer import (
+    AnalyzerEngine,
+    Pattern,
+    PatternRecognizer,
+    RecognizerRegistry,
+    RecognizerResult,
+)
 from presidio_analyzer.nlp_engine import SpacyNlpEngine
 from presidio_anonymizer import AnonymizerEngine
 
@@ -136,6 +144,7 @@ class PiiDetector(Scanner):
         self._config = config
         self._analyzer: AnalyzerEngine | None = None
         self._anonymizer: AnonymizerEngine | None = None
+        self._init_lock = asyncio.Lock()
 
     @property
     def name(self) -> str:
@@ -147,31 +156,32 @@ class PiiDetector(Scanner):
 
     async def initialize(self) -> None:
         """Initialize Presidio with Dutch spaCy model and custom recognizers."""
-        if self._analyzer is not None:
-            return
+        async with self._init_lock:
+            if self._analyzer is not None:
+                return
 
-        nlp_engine = SpacyNlpEngine(
-            models=[
-                {"lang_code": "nl", "model_name": "nl_core_news_lg"},
-                {"lang_code": "en", "model_name": "en_core_web_lg"},
-            ]
-        )
+            nlp_engine = SpacyNlpEngine(
+                models=[
+                    {"lang_code": "nl", "model_name": "nl_core_news_lg"},
+                    {"lang_code": "en", "model_name": "en_core_web_lg"},
+                ]
+            )
 
-        registry = RecognizerRegistry()
-        registry.load_predefined_recognizers(nlp_engine=nlp_engine)
+            registry = RecognizerRegistry()
+            registry.load_predefined_recognizers(nlp_engine=nlp_engine)
 
-        registry.add_recognizer(BsnRecognizer())
-        registry.add_recognizer(DutchPhoneRecognizer())
-        registry.add_recognizer(DutchPostalCodeRecognizer())
-        registry.add_recognizer(SecretRecognizer())
+            registry.add_recognizer(BsnRecognizer())
+            registry.add_recognizer(DutchPhoneRecognizer())
+            registry.add_recognizer(DutchPostalCodeRecognizer())
+            registry.add_recognizer(SecretRecognizer())
 
-        self._analyzer = AnalyzerEngine(
-            nlp_engine=nlp_engine,
-            registry=registry,
-        )
-        self._anonymizer = AnonymizerEngine()
+            self._analyzer = AnalyzerEngine(
+                nlp_engine=nlp_engine,
+                registry=registry,
+            )
+            self._anonymizer = AnonymizerEngine()
 
-        logger.info("pii_detector_initialized")
+            logger.info("pii_detector_initialized")
 
     async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
         if self._analyzer is None or self._anonymizer is None:
@@ -180,8 +190,18 @@ class PiiDetector(Scanner):
         direction = (metadata or {}).get("direction", "input")
         scanner_config = self._config.get_scanner_config(self.name)
 
-        results_nl = self._analyzer.analyze(text=content, language="nl", entities=None)
-        results_en = self._analyzer.analyze(text=content, language="en", entities=None)
+        try:
+            results_nl = self._analyzer.analyze(text=content, language="nl", entities=None)
+            results_en = self._analyzer.analyze(text=content, language="en", entities=None)
+        except Exception as e:
+            logger.error("pii_detector_analysis_error", error=str(e))
+            return ScanResult(
+                scanner_name=self.name,
+                action=Action.FLAG,
+                confidence=0.0,
+                description=f"PII detection error: {e}",
+                details={"error": str(e)},
+            )
 
         all_results = self._merge_results(results_nl, results_en)
 
@@ -252,11 +272,13 @@ class PiiDetector(Scanner):
             },
         )
 
-    def _merge_results(self, results_nl, results_en):
+    def _merge_results(
+        self, results_nl: list[RecognizerResult], results_en: list[RecognizerResult]
+    ) -> list[RecognizerResult]:
         """Merge and deduplicate results from multiple language analyses."""
         all_results = list(results_nl) + list(results_en)
         all_results.sort(key=lambda r: (-r.score, r.start))
-        merged = []
+        merged: list[RecognizerResult] = []
         for result in all_results:
             if not any(
                 existing.start <= result.start and existing.end >= result.end for existing in merged

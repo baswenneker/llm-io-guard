@@ -7,6 +7,7 @@ import structlog
 
 from ..config import PipelineConfig
 from ..models import Action, ScanResult
+from ..rate_limiter import RateLimiter
 from ..scanner import Scanner
 
 logger = structlog.get_logger()
@@ -92,15 +93,17 @@ FEW_SHOT_EXAMPLES: list[anthropic.types.MessageParam] = [
     },
 ]
 
-_MAX_CONTENT_LENGTH = 10_000
+# Maximum content length sent to the LLM API (distinct from pipeline-wide max_content_length)
+MAX_CONTENT_LENGTH = 10_000
 
 
 class LlmJudgeScanner(Scanner):
     """Content safety classification using Claude Haiku 4.5."""
 
-    def __init__(self, config: PipelineConfig):
+    def __init__(self, config: PipelineConfig, rate_limiter: RateLimiter | None = None):
         self._config = config
         self._client: anthropic.AsyncAnthropic | None = None
+        self._rate_limiter = rate_limiter
 
     @property
     def name(self) -> str:
@@ -120,6 +123,18 @@ class LlmJudgeScanner(Scanner):
 
         scanner_config = self._config.get_scanner_config(self.name)
 
+        if self._rate_limiter is not None:
+            allowed = await self._rate_limiter.acquire(estimated_cost=0.003)
+            if not allowed:
+                logger.warning("llm_judge_rate_limited")
+                return ScanResult(
+                    scanner_name=self.name,
+                    action=Action.BLOCK,
+                    confidence=1.0,
+                    description="LLM judge rate limit exceeded",
+                    details={"error": "rate_limited"},
+                )
+
         try:
             response = await self._client.messages.create(
                 model="claude-haiku-4-5-20251001",
@@ -129,7 +144,7 @@ class LlmJudgeScanner(Scanner):
                     *FEW_SHOT_EXAMPLES,
                     {
                         "role": "user",
-                        "content": f"Content to analyze:\n\n{content[:_MAX_CONTENT_LENGTH]}",
+                        "content": f"Content to analyze:\n\n{content[:MAX_CONTENT_LENGTH]}",
                     },
                 ],
             )
@@ -172,17 +187,17 @@ class LlmJudgeScanner(Scanner):
             logger.error("llm_judge_parse_error", error=str(e))
             return ScanResult(
                 scanner_name=self.name,
-                action=Action.FLAG,
-                confidence=0.5,
-                description=f"LLM judge returned unparseable response: {e}",
+                action=Action.BLOCK,
+                confidence=1.0,
+                description=f"LLM judge failed (fail-closed): {e}",
                 details={"error": str(e)},
             )
         except anthropic.APIError as e:
             logger.error("llm_judge_api_error", error=str(e))
             return ScanResult(
                 scanner_name=self.name,
-                action=Action.FLAG,
-                confidence=0.5,
-                description=f"LLM judge API error: {e}",
+                action=Action.BLOCK,
+                confidence=1.0,
+                description=f"LLM judge API error (fail-closed): {e}",
                 details={"error": str(e)},
             )

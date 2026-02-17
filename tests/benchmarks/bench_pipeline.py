@@ -32,7 +32,7 @@ class TestPipelineBenchmarks:
         for _ in range(100):
             await pipeline.scan(content)
         elapsed = (time.perf_counter() - start) / 100
-        assert elapsed < 0.010, f"Pipeline (plain text) too slow: {elapsed*1000:.2f}ms"
+        assert elapsed < 0.010, f"Pipeline (plain text) too slow: {elapsed * 1000:.2f}ms"
 
     async def test_pipeline_html_content_latency(self):
         """Pipeline with HTML content should complete in <20ms."""
@@ -48,7 +48,7 @@ class TestPipelineBenchmarks:
         for _ in range(50):
             await pipeline.scan(content, metadata={"content_type": "text/html"})
         elapsed = (time.perf_counter() - start) / 50
-        assert elapsed < 0.020, f"Pipeline (HTML) too slow: {elapsed*1000:.2f}ms"
+        assert elapsed < 0.020, f"Pipeline (HTML) too slow: {elapsed * 1000:.2f}ms"
 
     async def test_pipeline_email_metadata_latency(self):
         """Pipeline with email metadata should complete in <10ms."""
@@ -64,7 +64,7 @@ class TestPipelineBenchmarks:
         for _ in range(100):
             await pipeline.scan(content, metadata=metadata)
         elapsed = (time.perf_counter() - start) / 100
-        assert elapsed < 0.010, f"Pipeline (email) too slow: {elapsed*1000:.2f}ms"
+        assert elapsed < 0.010, f"Pipeline (email) too slow: {elapsed * 1000:.2f}ms"
 
     async def test_pipeline_throughput(self):
         """Pipeline should handle at least 100 scans per second."""

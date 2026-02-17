@@ -1,7 +1,7 @@
 """Tests for the ContentSafetyPipeline."""
 
 import pytest
-from helpers import BlockScanner, FlagScanner, PassScanner, SanitizingScanner
+from helpers import BlockScanner, ErrorScanner, FlagScanner, PassScanner, SanitizingScanner
 
 from llm_io_guard import Action
 from llm_io_guard.config import PipelineConfig, ScannerConfig
@@ -198,3 +198,51 @@ class TestPipelineInitialize:
         result = await pipeline.scan("<script>test</script>")
         assert result.original_content == "<script>test</script>"
         assert result.sanitized_content == "test"
+
+
+class TestPipelineErrorHandling:
+    """Tests for pipeline error handling when scanners raise exceptions."""
+
+    @pytest.fixture
+    def pipeline(self):
+        config = PipelineConfig()
+        return ContentSafetyPipeline(config)
+
+    @pytest.mark.asyncio
+    async def test_tier1_scanner_exception_returns_flag(self, pipeline):
+        """Pipeline should handle Tier 1 scanner exceptions gracefully."""
+        error_scanner = ErrorScanner(tier=1)
+        pipeline.register_scanner(error_scanner)
+        result = await pipeline.scan("test content")
+        assert result.action == Action.FLAG
+        assert len(result.scan_results) == 1
+        assert "error" in result.scan_results[0].details
+
+    @pytest.mark.asyncio
+    async def test_tier2_scanner_exception_returns_flag(self, pipeline):
+        """Pipeline should handle Tier 2 scanner exceptions gracefully."""
+        error_scanner = ErrorScanner(tier=2)
+        pipeline.register_scanner(error_scanner)
+        result = await pipeline.scan("test content")
+        assert result.action == Action.FLAG
+        assert len(result.scan_results) == 1
+        assert "error" in result.scan_results[0].details
+
+    @pytest.mark.asyncio
+    async def test_tier3_scanner_exception_returns_flag(self, pipeline):
+        """Pipeline should handle Tier 3 scanner exceptions gracefully."""
+        flag_scanner = FlagScanner()
+        error_scanner = ErrorScanner(tier=3)
+        pipeline.register_scanner(flag_scanner)
+        pipeline.register_scanner(error_scanner)
+        result = await pipeline.scan("test content")
+        # Tier 2 flagged + Tier 3 errored = FLAG
+        assert result.action == Action.FLAG
+        assert any("error" in r.details for r in result.scan_results)
+
+    @pytest.mark.asyncio
+    async def test_oversized_content_blocked(self, pipeline):
+        """Pipeline should block content exceeding max_content_length."""
+        oversized_content = "x" * (pipeline.config.max_content_length + 1)
+        result = await pipeline.scan(oversized_content)
+        assert result.action == Action.BLOCK

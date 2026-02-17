@@ -21,7 +21,7 @@ class TestTier1Benchmarks:
         for _ in range(100):
             await scanner.scan(content)
         elapsed = (time.perf_counter() - start) / 100
-        assert elapsed < 0.005, f"InvisibleTextScanner too slow: {elapsed*1000:.2f}ms"
+        assert elapsed < 0.005, f"InvisibleTextScanner too slow: {elapsed * 1000:.2f}ms"
 
     async def test_html_sanitizer_latency(self):
         """HtmlSanitizer should process content in <5ms per scan."""
@@ -31,7 +31,7 @@ class TestTier1Benchmarks:
         for _ in range(100):
             await scanner.scan(content)
         elapsed = (time.perf_counter() - start) / 100
-        assert elapsed < 0.005, f"HtmlSanitizer too slow: {elapsed*1000:.2f}ms"
+        assert elapsed < 0.005, f"HtmlSanitizer too slow: {elapsed * 1000:.2f}ms"
 
     async def test_xml_safe_parser_latency(self):
         """XmlSafeParser should process content in <5ms per scan."""
@@ -41,7 +41,7 @@ class TestTier1Benchmarks:
         for _ in range(100):
             await scanner.scan(content)
         elapsed = (time.perf_counter() - start) / 100
-        assert elapsed < 0.005, f"XmlSafeParser too slow: {elapsed*1000:.2f}ms"
+        assert elapsed < 0.005, f"XmlSafeParser too slow: {elapsed * 1000:.2f}ms"
 
     async def test_tier1_total_latency(self):
         """All Tier 1 scanners combined should process in <5ms."""
@@ -52,7 +52,7 @@ class TestTier1Benchmarks:
             for scanner in scanners:
                 await scanner.scan(content)
         elapsed = (time.perf_counter() - start) / 100
-        assert elapsed < 0.005, f"Combined Tier 1 too slow: {elapsed*1000:.2f}ms"
+        assert elapsed < 0.005, f"Combined Tier 1 too slow: {elapsed * 1000:.2f}ms"
 
     async def test_invisible_text_with_many_invisible_chars(self):
         """InvisibleTextScanner with many invisible chars should still be fast."""
@@ -62,7 +62,7 @@ class TestTier1Benchmarks:
         for _ in range(100):
             await scanner.scan(content)
         elapsed = (time.perf_counter() - start) / 100
-        assert elapsed < 0.005, f"InvisibleTextScanner (heavy) too slow: {elapsed*1000:.2f}ms"
+        assert elapsed < 0.005, f"InvisibleTextScanner (heavy) too slow: {elapsed * 1000:.2f}ms"
 
     async def test_html_sanitizer_large_html(self):
         """HtmlSanitizer with large HTML should complete in reasonable time."""
@@ -72,4 +72,4 @@ class TestTier1Benchmarks:
         for _ in range(50):
             await scanner.scan(content, metadata={"content_type": "text/html"})
         elapsed = (time.perf_counter() - start) / 50
-        assert elapsed < 0.050, f"HtmlSanitizer (large) too slow: {elapsed*1000:.2f}ms"
+        assert elapsed < 0.050, f"HtmlSanitizer (large) too slow: {elapsed * 1000:.2f}ms"

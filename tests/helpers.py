@@ -73,6 +73,25 @@ class FlagScanner(Scanner):
         )
 
 
+class ErrorScanner(Scanner):
+    """Scanner that raises an exception on scan() for testing error handling."""
+
+    def __init__(self, tier: int = 2, error: Exception | None = None):
+        self._tier = tier
+        self._error = error or RuntimeError("Test scanner error")
+
+    @property
+    def name(self) -> str:
+        return "error_scanner"
+
+    @property
+    def tier(self) -> int:
+        return self._tier
+
+    async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+        raise self._error
+
+
 class SanitizingScanner(Scanner):
     """Tier 1 scanner that sanitizes content."""
 

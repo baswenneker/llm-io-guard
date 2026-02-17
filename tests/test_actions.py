@@ -32,7 +32,7 @@ class TestActionRequestPostInit:
         create_action = ActionRequest(
             category=ActionCategory.CREATE, tool_name="touch", description="Create file"
         )
-        assert create_action.requires_confirmation is False
+        assert create_action.requires_confirmation is True
 
 
 class TestAutoAllowedActions:
@@ -50,11 +50,11 @@ class TestAutoAllowedActions:
         )
         assert await validate_action(action) is True
 
-    async def test_create_action_allowed_without_confirmation(self):
+    async def test_create_action_requires_confirmation(self):
         action = ActionRequest(
             category=ActionCategory.CREATE, tool_name="touch", description="Create a file"
         )
-        assert await validate_action(action) is True
+        assert await validate_action(action) is False
 
 
 class TestConfirmationRequired:

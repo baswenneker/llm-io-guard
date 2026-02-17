@@ -1,10 +1,15 @@
 """Prompt injection detection using Meta Prompt Guard 2."""
 
-from typing import Any
+import asyncio
 
 import structlog
 import torch
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import (
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    PreTrainedModel,
+    PreTrainedTokenizerBase,
+)
 
 from ..config import PipelineConfig
 from ..models import Action, ScanResult
@@ -20,8 +25,9 @@ class PromptGuardScanner(Scanner):
 
     def __init__(self, config: PipelineConfig):
         self._config = config
-        self._model: Any = None
-        self._tokenizer: Any = None
+        self._model: PreTrainedModel | None = None
+        self._tokenizer: PreTrainedTokenizerBase | None = None
+        self._init_lock = asyncio.Lock()
 
     @property
     def name(self) -> str:
@@ -33,21 +39,26 @@ class PromptGuardScanner(Scanner):
 
     async def initialize(self) -> None:
         """Load model and tokenizer (singleton pattern)."""
-        if self._model is not None:
-            return
+        async with self._init_lock:
+            if self._model is not None:
+                return
 
-        model_name = "meta-llama/Prompt-Guard-2-86M"
-        cache_dir = self._config.model_cache_dir
+            model_name = "meta-llama/Prompt-Guard-2-86M"
+            model_revision = "a8ded8e697ce7c355e395a0df51f94adb4a2fd27"
+            cache_dir = self._config.model_cache_dir
 
-        logger.info("loading_prompt_guard", model=model_name)
+            logger.info("loading_prompt_guard", model=model_name)
 
-        self._tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
-        self._model = AutoModelForSequenceClassification.from_pretrained(
-            model_name, cache_dir=cache_dir
-        )
-        self._model.eval()
+            self._tokenizer = AutoTokenizer.from_pretrained(
+                model_name, cache_dir=cache_dir, revision=model_revision
+            )
+            model = AutoModelForSequenceClassification.from_pretrained(
+                model_name, cache_dir=cache_dir, revision=model_revision
+            )
+            model.eval()
+            self._model = model
 
-        logger.info("prompt_guard_loaded", model=model_name)
+            logger.info("prompt_guard_loaded", model=model_name)
 
     async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
         if self._model is None or self._tokenizer is None:
@@ -59,7 +70,17 @@ class PromptGuardScanner(Scanner):
         max_jailbreak_score = 0.0
 
         for chunk in chunks:
-            injection_score, jailbreak_score = self._classify_chunk(chunk)
+            try:
+                injection_score, jailbreak_score = self._classify_chunk(chunk)
+            except Exception as e:
+                logger.error("prompt_guard_inference_error", error=str(e))
+                return ScanResult(
+                    scanner_name=self.name,
+                    action=Action.FLAG,
+                    confidence=0.0,
+                    description=f"Prompt guard inference error: {e}",
+                    details={"error": str(e)},
+                )
             max_injection_score = max(max_injection_score, injection_score)
             max_jailbreak_score = max(max_jailbreak_score, jailbreak_score)
 
@@ -107,6 +128,8 @@ class PromptGuardScanner(Scanner):
 
     def _classify_chunk(self, text: str) -> tuple[float, float]:
         """Classify a single text chunk."""
+        assert self._tokenizer is not None  # noqa: S101
+        assert self._model is not None  # noqa: S101
         inputs = self._tokenizer(
             text,
             return_tensors="pt",
@@ -123,6 +146,7 @@ class PromptGuardScanner(Scanner):
 
     def _chunk_text(self, text: str, max_tokens: int = 512, overlap: int = 50) -> list[str]:
         """Split text into overlapping chunks for the model's token limit."""
+        assert self._tokenizer is not None  # noqa: S101
         tokens = self._tokenizer.encode(text, add_special_tokens=False)
 
         if len(tokens) <= max_tokens:
@@ -133,7 +157,7 @@ class PromptGuardScanner(Scanner):
         while start < len(tokens):
             end = start + max_tokens
             chunk_tokens = tokens[start:end]
-            chunk_text = self._tokenizer.decode(chunk_tokens)
+            chunk_text: str = self._tokenizer.decode(chunk_tokens)
             chunks.append(chunk_text)
             start += max_tokens - overlap
 

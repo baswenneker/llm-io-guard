@@ -54,7 +54,6 @@ def configure_logging(
         # Development processors with pretty console output
         processors.extend(
             [
-                structlog.processors.add_log_level,
                 structlog.dev.ConsoleRenderer(
                     colors=True,
                     exception_formatter=structlog.dev.plain_traceback,
@@ -83,7 +82,7 @@ def get_logger(name: str) -> FilteringBoundLogger:
     return structlog.get_logger(name)
 
 
-class log_context:  # noqa: N801
+class log_context:  # noqa: N801 -- lowercase intentional, used as context manager
     """Context manager for adding structured context to logs.
 
     Example:

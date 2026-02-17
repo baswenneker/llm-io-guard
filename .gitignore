@@ -163,3 +163,4 @@ uv.lock
 
 # Ruff
 .ruff_cache/
+.trees

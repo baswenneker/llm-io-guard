@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
@@ -48,9 +49,9 @@ class PipelineConfig(BaseModel):
     @classmethod
     def from_env(cls) -> "PipelineConfig":
         """Load configuration from environment variables."""
-        config = cls()
+        kwargs: dict[str, Any] = {}
         if log_level := os.environ.get("LLM_IO_GUARD_LOG_LEVEL"):
-            config.log_level = log_level
-        if max_length := os.environ.get("LLM_IO_GUARD_MAX_CONTENT_LENGTH"):
-            config.max_content_length = int(max_length)
-        return config
+            kwargs["log_level"] = log_level
+        if raw_length := os.environ.get("LLM_IO_GUARD_MAX_CONTENT_LENGTH"):
+            kwargs["max_content_length"] = int(raw_length)
+        return cls(**kwargs)

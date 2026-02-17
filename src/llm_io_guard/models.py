@@ -20,7 +20,7 @@ class ScanResult:
     action: Action
     confidence: float
     description: str
-    details: dict = field(default_factory=dict)
+    details: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass

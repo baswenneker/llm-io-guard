@@ -1,11 +1,13 @@
 """URL safety scanner with Google Safe Browsing and homoglyph detection."""
 
+import asyncio
 import os
 import re
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 
 import structlog
+from confusable_homoglyphs import confusables
 
 from ..config import PipelineConfig
 from ..models import Action, ScanResult
@@ -139,8 +141,9 @@ class UrlScanner(Scanner):
         if self._safe_browsing is None:
             return []
         threats = []
-        # pysafebrowsing supports batch lookup
-        result = self._safe_browsing.lookup_urls(urls)
+        # pysafebrowsing supports batch lookup — run in executor to avoid blocking
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, self._safe_browsing.lookup_urls, urls)
 
         for url, info in result.items():
             if info.get("malicious"):
@@ -158,8 +161,6 @@ class UrlScanner(Scanner):
 
     def _check_homoglyphs(self, url: str) -> dict | None:
         """Check URL domain for homoglyph spoofing."""
-        from confusable_homoglyphs import confusables
-
         try:
             parsed = urlparse(url if "://" in url else f"https://{url}")
             domain = parsed.hostname

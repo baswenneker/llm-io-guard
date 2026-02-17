@@ -22,6 +22,8 @@ class ActionCategory(Enum):
 
 
 REQUIRES_CONFIRMATION = {
+    ActionCategory.CREATE,
+    ActionCategory.MODIFY,
     ActionCategory.DELETE,
     ActionCategory.SEND,
     ActionCategory.EXECUTE,
@@ -41,7 +43,7 @@ class ActionRequest:
     tool_name: str
     description: str
     parameters: dict = field(default_factory=dict)
-    requires_confirmation: bool = False
+    requires_confirmation: bool = field(init=False, default=False)
 
     def __post_init__(self):
         self.requires_confirmation = self.category in REQUIRES_CONFIRMATION
@@ -68,7 +70,5 @@ async def validate_action(
         )
         return confirmed
 
-    logger.info(
-        "action_auto_allowed", action=action.description, category=action.category.value
-    )
+    logger.info("action_auto_allowed", action=action.description, category=action.category.value)
     return True
