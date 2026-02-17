@@ -66,10 +66,12 @@ class PromptGuardScanner(Scanner):
 
     @property
     def name(self) -> str:
+        """Return scanner name."""
         return "prompt_guard"
 
     @property
     def tier(self) -> int:
+        """Return scanner tier."""
         return 2
 
     @property
@@ -101,6 +103,7 @@ class PromptGuardScanner(Scanner):
             logger.info("prompt_guard_loaded", model=model_name)
 
     async def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
+        """Scan content for prompt injection and jailbreak attempts."""
         if self._model is None or self._tokenizer is None:
             raise RuntimeError("PromptGuardScanner not initialized. Call initialize() first.")
 
@@ -115,9 +118,9 @@ class PromptGuardScanner(Scanner):
                 logger.error("prompt_guard_inference_error", error=str(e))
                 return ScanResult(
                     scanner_name=self.name,
-                    action=Action.FLAG,
-                    confidence=0.0,
-                    description=f"Prompt guard inference error: {e}",
+                    action=Action.BLOCK,
+                    confidence=1.0,
+                    description=f"Prompt guard inference error (fail-closed): {e}",
                     details={"error": str(e)},
                 )
             max_injection_score = max(max_injection_score, injection_score)
