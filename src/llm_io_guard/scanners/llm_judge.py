@@ -1,20 +1,29 @@
 """LLM Judge scanner using Claude Haiku 4.5 for content safety classification."""
 
+from __future__ import annotations
+
 import json
-from typing import Any
+from typing import TYPE_CHECKING
 
 import structlog
 
 from ..models import Action, ScanResult
-from ..rate_limiter import RateLimiter
 from ..scanner import Scanner
 
+_AnthropicAPIError: type[Exception] = Exception
 try:
     import anthropic
+    from anthropic.types import TextBlock
 
     _HAS_ANTHROPIC = True
+    _AnthropicAPIError = anthropic.APIError
 except ImportError:
     _HAS_ANTHROPIC = False
+
+if TYPE_CHECKING:
+    from anthropic.types import MessageParam
+
+    from ..rate_limiter import RateLimiter
 
 logger = structlog.get_logger()
 
@@ -42,7 +51,7 @@ The "category" field MUST be one of the listed string values.
 
 Be conservative: when in doubt, flag content as unsafe. False positives are preferable to false negatives in a security context."""
 
-FEW_SHOT_EXAMPLES: list[dict[str, str]] = [
+FEW_SHOT_EXAMPLES: list[MessageParam] = [
     {
         "role": "user",
         "content": "<content_to_analyze>Hi, could you please send me the quarterly report? I need it for the meeting tomorrow. Thanks, Jan</content_to_analyze>",
@@ -139,7 +148,7 @@ class LlmJudgeScanner(Scanner):
         self._threshold_block = threshold_block
         self._threshold_flag = threshold_flag
         self._model = model
-        self._client: Any = None
+        self._client: anthropic.AsyncAnthropic | None = None
         self._rate_limiter = rate_limiter
 
     @property
@@ -189,7 +198,9 @@ class LlmJudgeScanner(Scanner):
             )
 
             content_block = response.content[0]
-            response_text: str = content_block.text
+            if not isinstance(content_block, TextBlock):
+                raise ValueError(f"Expected TextBlock, got {type(content_block).__name__}")
+            response_text: str = content_block.text  # pyright: ignore[reportAttributeAccessIssue]
             result = json.loads(response_text)
 
             # Strict type validation — reject malformed responses
@@ -237,7 +248,7 @@ class LlmJudgeScanner(Scanner):
                 description=f"LLM judge failed (fail-closed): {e}",
                 details={"error": str(e)},
             )
-        except anthropic.APIError as e:
+        except _AnthropicAPIError as e:
             logger.error("llm_judge_api_error", error=str(e))
             return ScanResult(
                 scanner_name=self.name,
