@@ -164,3 +164,7 @@ uv.lock
 # Ruff
 .ruff_cache/
 .trees
+
+openspec
+.claude/commands/opsx
+.claude/skills/openspec*

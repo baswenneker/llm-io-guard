@@ -1,15 +1,11 @@
-# llm_io_guard
-
-**Layered content safety pipeline for LLM agents.**
+# Layered content safety pipeline for LLM agents
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
----
-
 AI agents increasingly operate with access to private data, process untrusted external content, and execute real-world actions (send emails, modify databases, call APIs). This creates what [Simon Willison](https://simonwillison.net/) (Django co-creator, AI/LLM security expert) calls the **["lethal trifecta"](https://simonw.substack.com/p/the-lethal-trifecta-for-ai-agents)**: private data + untrusted content + external actions. A single prompt injection in an incoming email could instruct the agent to exfiltrate confidential data, send unauthorized messages, or modify critical records.
 
-`llm-io-guard` is a Python library that scans both **input** (before the LLM sees it) and **output** (before the agent acts on LLM responses). It combines fast deterministic sanitization, ML-based detection, and LLM-based judgment into a tiered, fail-fast pipeline that runs in under 600ms.
+`llm-io-guard` is a Python library that scans both **input** (before the LLM sees it) and **output** (before the agent acts on LLM responses). It combines fast deterministic sanitization, ML-based detection, and LLM-based judgment into a tiered, fail-fast pipeline that runs in under 600ms. Adding new filters is easy — just implement the `Scanner` interface and plug it into the pipeline.
 
 ## What It Catches
 
@@ -109,45 +105,56 @@ The scanner returned **BLOCK**, preventing the API key from reaching the user or
 
 ## Architecture
 
-The pipeline uses a tiered architecture where fast, deterministic checks run first. If content fails any tier, processing stops immediately (fail-fast).
+The pipeline has two entry points: `InputFilter` scans untrusted content *before* it reaches the LLM, and `OutputFilter` scans LLM responses *before* the agent acts on them. Each filter runs only the scanners registered for its direction. A BLOCK at any tier short-circuits the pipeline immediately (fail-fast).
 
 ```
-+---------------------------------------------------------+
-|                  INCOMING CONTENT                        |
-|            (email, web page, document)                   |
-+-----------------------+---------------------------------+
-                        |
-                        v
-+---------------------------------------------------------+
-|  TIER 1: Fast Sanitization (<5ms, deterministic)        |
-|  +---------------+ +----------------+ +----------------+ |
-|  | Invisible     | | HTML           | | XML Safe       | |
-|  | Text Strip    | | Sanitizer      | | Parser         | |
-|  +---------------+ +----------------+ +----------------+ |
-+-----------------------+---------------------------------+
-                        | PASS
-                        v
-+---------------------------------------------------------+
-|  TIER 2: ML & Pattern Detection (<50ms, parallel)       |
-|  +---------------+ +----------------+ +----------------+ |
-|  | Prompt        | | PII &          | | URL &          | |
-|  | Guard 2       | | Presidio       | | Phishing       | |
-|  +---------------+ +----------------+ +----------------+ |
-+-----------------------+---------------------------------+
-                        | PASS
-                        v
-+---------------------------------------------------------+
-|  TIER 3: LLM Judge (<500ms, conditional)                |
-|  +--------------------------------------------------+   |
-|  | Claude Haiku 4.5 -- content safety classifier    |   |
-|  | (only for high-risk sources)                      |   |
-|  +--------------------------------------------------+   |
-+-----------------------+---------------------------------+
-                        | PASS
-                        v
-+---------------------------------------------------------+
-|              SAFE CONTENT -> LLM / Agent                |
-+---------------------------------------------------------+
+                      UNTRUSTED CONTENT
+                     (email, web, document)
+                              |
+        +---------------------+----------------------+
+        |               InputFilter                   |
+        |                                             |
+        |  Tier 1: Sanitization (<5ms, sequential)    |
+        |  +-------------+ +-----------+ +----------+ |
+        |  | Invisible   | | HTML      | | XML Safe | |
+        |  | Text Strip  | | Sanitizer | | Parser   | |
+        |  +-------------+ +-----------+ +----------+ |
+        |                     | PASS                   |
+        |  Tier 2: ML Detection (<50ms, parallel)     |
+        |  +-------------+ +-----------+              |
+        |  | Prompt      | | URL       |              |
+        |  | Guard 2     | | Scanner   |              |
+        |  +-------------+ +-----------+              |
+        |                     | PASS                   |
+        |  Tier 3: LLM Judge (<500ms, conditional)    |
+        |  +-----------------------------------------+ |
+        |  | Claude Haiku (high-risk sources only)   | |
+        |  +-----------------------------------------+ |
+        +---------------------+----------------------+
+                              | PASS
+                              v
+                     +----------------+
+                     |   LLM / Agent  |
+                     +----------------+
+                              |
+        +---------------------+----------------------+
+        |              OutputFilter                   |
+        |                                             |
+        |  Tier 2: Detection (<50ms, parallel)        |
+        |  +-------------+ +-----------+              |
+        |  | PII &       | | URL       |              |
+        |  | Secrets     | | Scanner   |              |
+        |  +-------------+ +-----------+              |
+        |                     | PASS                   |
+        |  Tier 3: LLM Judge (<500ms)                 |
+        |  +-----------------------------------------+ |
+        |  | Claude Haiku (always runs if registered) | |
+        |  +-----------------------------------------+ |
+        +---------------------+----------------------+
+                              | PASS
+                              v
+                        SAFE OUTPUT
+                 (response, tool call, action)
 ```
 
 | Tier | Latency Target | Type | Scanners |
@@ -156,7 +163,7 @@ The pipeline uses a tiered architecture where fast, deterministic checks run fir
 | 2 -- Medium | <50ms | ML models, pattern matching | Prompt Guard 2, Presidio PII, URL/phishing detection |
 | 3 -- Slow | <500ms | LLM-based | Claude Haiku judge (conditional) |
 
-Tier 1 scanners run **sequentially** because they sanitize content for downstream tiers. Tier 2 scanners run **in parallel** via `asyncio.gather()`. Tier 3 runs **conditionally** -- only for high-risk sources (email, web, unknown) or when Tier 2 flags content.
+Tier 1 scanners run **sequentially** (input only) because they sanitize content for downstream tiers. Tier 2 scanners run **in parallel** via `asyncio.gather()`. Tier 3 runs **conditionally** for InputFilter (only for high-risk sources or when Tier 2 flags content), and **always** for OutputFilter when registered.
 
 Total pipeline latency target: **<600ms** (worst case, with Tier 3). Typical case (Tier 1 + 2 only): **<60ms**.
 
