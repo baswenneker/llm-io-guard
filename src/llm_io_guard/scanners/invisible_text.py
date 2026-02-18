@@ -1,4 +1,9 @@
-"""Scanner that detects and strips invisible Unicode characters."""
+"""Tier 1 scanner that detects and strips invisible Unicode characters.
+
+Invisible characters (zero-width joiners, directional overrides, tag characters,
+etc.) can be used to hide content from human review while remaining visible to
+LLMs. This scanner strips them and flags content that has suspiciously many.
+"""
 
 import re
 
@@ -27,14 +32,21 @@ VARIATION_SELECTORS = re.compile(r"[\ufe00-\ufe0f\U000e0100-\U000e01ef]+")
 
 
 class InvisibleTextScanner(Scanner):
-    """Detects and strips invisible Unicode characters."""
+    """Tier 1 input scanner that strips invisible Unicode characters.
+
+    Always produces ``sanitized_content`` in the result details. Content with
+    more than 10 invisible characters is flagged as a potential content-hiding
+    attack, with confidence scaling linearly up to 1.0 at 50 characters.
+    """
 
     @property
     def name(self) -> str:
+        """Scanner identifier: ``invisible_text``."""
         return "invisible_text"
 
     @property
     def tier(self) -> int:
+        """Tier 1 — deterministic regex, sub-millisecond."""
         return 1
 
     @property
@@ -43,6 +55,16 @@ class InvisibleTextScanner(Scanner):
         return frozenset({"input"})
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
+        """Strip invisible characters and flag suspicious amounts.
+
+        Args:
+            content: The text content to scan.
+            metadata: Optional metadata (unused by this scanner).
+
+        Returns:
+            ScanResult with ``sanitized_content`` in details. Action is FLAG
+            when more than 10 invisible characters are found, PASS otherwise.
+        """
         invisible_matches = INVISIBLE_CHARS_PATTERN.findall(content)
         variation_matches = VARIATION_SELECTORS.findall(content)
 
@@ -53,6 +75,8 @@ class InvisibleTextScanner(Scanner):
         sanitized = VARIATION_SELECTORS.sub("", sanitized)
 
         if total_invisible > 0:
+            # >10 invisible chars is unusual in legitimate text and suggests
+            # a content-hiding attack. Confidence scales linearly to 1.0 at 50 chars.
             if total_invisible > 10:
                 return ScanResult(
                     scanner_name=self.name,

@@ -1,4 +1,10 @@
-"""Scanner that safely parses XML to prevent XXE and entity attacks."""
+"""Tier 1 scanner that safely parses XML to prevent XXE and entity attacks.
+
+Uses ``defusedxml`` to detect XML eXternal Entity (XXE) injection, billion-laughs
+entity expansion, and other XML-based attacks. Blocks only confirmed malicious
+entities; malformed (unparseable) XML is passed through because it cannot carry
+an entity-based payload.
+"""
 
 import defusedxml.ElementTree as DefusedET
 from defusedxml import DefusedXmlException
@@ -8,14 +14,22 @@ from ..scanner import Scanner
 
 
 class XmlSafeParser(Scanner):
-    """Validates and safely parses XML content to prevent XXE and entity attacks."""
+    """Tier 1 input scanner that validates XML against XXE and entity attacks.
+
+    Uses ``defusedxml`` to parse XML safely. Blocks content when a
+    ``DefusedXmlException`` is raised (external entities, DTD processing, etc.).
+    Malformed XML that cannot be parsed is passed through because unparseable
+    XML cannot exploit entity-expansion vulnerabilities.
+    """
 
     @property
     def name(self) -> str:
+        """Scanner identifier: ``xml_safe_parser``."""
         return "xml_safe_parser"
 
     @property
     def tier(self) -> int:
+        """Tier 1 — deterministic XML parsing, sub-millisecond."""
         return 1
 
     @property
@@ -24,6 +38,16 @@ class XmlSafeParser(Scanner):
         return frozenset({"input"})
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
+        """Parse XML safely and block content with malicious entities.
+
+        Args:
+            content: The text content to scan.
+            metadata: Optional dict; uses ``content_type`` key to decide
+                whether to parse (defaults to ``"text/plain"``).
+
+        Returns:
+            ScanResult with BLOCK for malicious XML entities, PASS otherwise.
+        """
         content_type = (metadata or {}).get("content_type", "text/plain")
 
         # Only check content that looks like XML
@@ -59,6 +83,8 @@ class XmlSafeParser(Scanner):
                 },
             )
         except DefusedET.ParseError:
+            # Malformed XML cannot carry entity-expansion attacks, so it's safe
+            # to pass through. Downstream consumers will handle parse errors.
             return ScanResult(
                 scanner_name=self.name,
                 action=Action.PASS,

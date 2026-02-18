@@ -1,4 +1,9 @@
-"""Scanner that strips HTML to plain text."""
+"""Tier 1 scanner that strips HTML to plain text.
+
+Uses the ``html-sanitizer`` library (lxml-based) to remove all tags and
+attributes, keeping only visible text. Flags content where >80% is stripped,
+which may indicate a hidden-content attack (e.g. invisible ``<div>`` payloads).
+"""
 
 from html_sanitizer import Sanitizer as HtmlSanitizerLib
 
@@ -19,14 +24,21 @@ SANITIZER = HtmlSanitizerLib(
 
 
 class HtmlSanitizer(Scanner):
-    """Strips HTML to plain text, preserving readable structure."""
+    """Tier 1 input scanner that strips HTML to plain text.
+
+    Produces ``sanitized_content`` in result details. Flags content when
+    stripping removes more than 80% of the original length, indicating
+    the HTML was mostly non-visible markup (potential hidden payload).
+    """
 
     @property
     def name(self) -> str:
+        """Scanner identifier: ``html_sanitizer``."""
         return "html_sanitizer"
 
     @property
     def tier(self) -> int:
+        """Tier 1 — deterministic, sub-millisecond."""
         return 1
 
     @property
@@ -35,6 +47,17 @@ class HtmlSanitizer(Scanner):
         return frozenset({"input"})
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
+        """Strip HTML tags and flag content with excessive markup.
+
+        Args:
+            content: The text content to scan.
+            metadata: Optional dict; uses ``content_type`` key to decide
+                whether to sanitize (defaults to ``"text/plain"``).
+
+        Returns:
+            ScanResult with ``sanitized_content`` in details. Action is FLAG
+            when >80% of content was stripped, PASS otherwise.
+        """
         content_type = (metadata or {}).get("content_type", "text/plain")
 
         # Only sanitize HTML content
@@ -54,6 +77,8 @@ class HtmlSanitizer(Scanner):
         sanitized_len = len(sanitized)
         reduction_ratio = 1 - (sanitized_len / original_len) if original_len > 0 else 0
 
+        # >80% reduction means the HTML was mostly invisible markup — likely a
+        # hidden-content attack embedding payloads in tags/attributes.
         if reduction_ratio > 0.8:
             return ScanResult(
                 scanner_name=self.name,

@@ -1,4 +1,9 @@
-"""Abstract base class for content scanners."""
+"""Abstract base class for content scanners.
+
+All scanners in the pipeline extend ``Scanner`` and implement ``ascan()``.
+The base class provides sync wrappers (``scan``, ``initialize``) that call
+``asyncio.run()`` internally, so callers can use either the sync or async API.
+"""
 
 from abc import ABC, abstractmethod
 
@@ -7,7 +12,15 @@ from .utils.sync import run_sync
 
 
 class Scanner(ABC):
-    """Abstract base class for all content scanners."""
+    """Abstract base class for all content scanners.
+
+    Subclasses must implement ``name``, ``tier``, and ``ascan()``.
+    Optionally override ``supported_directions`` to restrict to ``"input"``
+    or ``"output"`` only, and ``ainitialize()`` for lazy resource loading
+    (models, API clients, etc.).
+
+    Sync wrappers ``scan()`` and ``initialize()`` are provided automatically.
+    """
 
     @property
     @abstractmethod
@@ -18,7 +31,7 @@ class Scanner(ABC):
     @property
     @abstractmethod
     def tier(self) -> int:
-        """Execution tier (1=fast, 2=medium, 3=slow)."""
+        """Execution tier (1=fast deterministic, 2=ML/pattern, 3=LLM judge)."""
         ...
 
     @abstractmethod
@@ -37,6 +50,8 @@ class Scanner(ABC):
     def scan(self, content: str, metadata: dict | None = None) -> ScanResult:
         """Scan content and return a result (sync).
 
+        Convenience wrapper that calls ``ascan()`` via ``asyncio.run()``.
+
         Args:
             content: The text content to scan.
             metadata: Optional metadata (source type, sender, etc.)
@@ -48,12 +63,21 @@ class Scanner(ABC):
 
     @property
     def supported_directions(self) -> frozenset[str]:
-        """Directions this scanner supports. Default: both."""
+        """Directions this scanner supports.
+
+        Returns ``{"input", "output"}`` by default. Override in subclasses to
+        restrict to a single direction.
+        """
         return frozenset({"input", "output"})
 
     async def ainitialize(self) -> None:  # noqa: B027
-        """Optional async initialization (model loading, etc.)."""
+        """Optional async initialization hook for loading models, API clients, etc.
+
+        Called once by the filter before the first scan. Subclasses that need
+        heavy setup (downloading ML models, creating API connections) should
+        override this rather than doing work in ``__init__``.
+        """
 
     def initialize(self) -> None:
-        """Optional sync initialization (model loading, etc.)."""
+        """Sync wrapper for ``ainitialize()``, calls ``asyncio.run()`` internally."""
         run_sync(self.ainitialize())

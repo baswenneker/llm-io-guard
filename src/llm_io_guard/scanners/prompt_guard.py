@@ -1,4 +1,10 @@
-"""Prompt injection detection using Meta Prompt Guard 2."""
+"""Tier 2 prompt injection detection using Meta Prompt Guard 2.
+
+Uses the ``meta-llama/Prompt-Guard-2-86M`` sequence classification model to
+detect prompt injection and jailbreak attempts. Content is chunked to fit the
+model's 512-token context window. The highest threat score across all chunks
+determines the final action.
+"""
 
 import asyncio
 import os
@@ -30,7 +36,12 @@ LABELS = {0: "benign", 1: "injection", 2: "jailbreak"}
 
 
 class PromptGuardScanner(Scanner):
-    """Prompt injection detection using Meta Prompt Guard 2."""
+    """Tier 2 input scanner for prompt injection using Meta Prompt Guard 2.
+
+    The model outputs three-class probabilities (benign / injection / jailbreak).
+    The maximum of the injection and jailbreak scores is used as the threat score.
+    On a tie, injection is preferred because it is the more common attack vector.
+    """
 
     def __init__(
         self,
@@ -66,12 +77,12 @@ class PromptGuardScanner(Scanner):
 
     @property
     def name(self) -> str:
-        """Return scanner name."""
+        """Scanner identifier: ``prompt_guard``."""
         return "prompt_guard"
 
     @property
     def tier(self) -> int:
-        """Return scanner tier."""
+        """Tier 2 — ML inference, ~20-50ms on CPU."""
         return 2
 
     @property
@@ -86,6 +97,7 @@ class PromptGuardScanner(Scanner):
                 return
 
             model_name = "meta-llama/Prompt-Guard-2-86M"
+            # Pin to a specific commit SHA for reproducibility and supply-chain safety.
             model_revision = "a8ded8e697ce7c355e395a0df51f94adb4a2fd27"
             cache_dir = self._model_cache_dir
 
@@ -103,7 +115,15 @@ class PromptGuardScanner(Scanner):
             logger.info("prompt_guard_loaded", model=model_name)
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
-        """Scan content for prompt injection and jailbreak attempts."""
+        """Scan content for prompt injection and jailbreak attempts.
+
+        Args:
+            content: The text content to scan.
+            metadata: Optional metadata (unused by this scanner).
+
+        Returns:
+            ScanResult with BLOCK/FLAG/PASS based on threat score vs thresholds.
+        """
         if self._model is None or self._tokenizer is None:
             raise RuntimeError("PromptGuardScanner not initialized. Call initialize() first.")
 
@@ -127,6 +147,7 @@ class PromptGuardScanner(Scanner):
             max_jailbreak_score = max(max_jailbreak_score, jailbreak_score)
 
         threat_score = max(max_injection_score, max_jailbreak_score)
+        # On a tie (>=), prefer "injection" — it is the more common attack vector.
         threat_type = "injection" if max_injection_score >= max_jailbreak_score else "jailbreak"
 
         if threat_score >= self._threshold_block:
@@ -169,7 +190,12 @@ class PromptGuardScanner(Scanner):
             )
 
     def _classify_chunk(self, text: str) -> tuple[float, float]:
-        """Classify a single text chunk."""
+        """Classify a single text chunk.
+
+        Returns:
+            Tuple of (injection_probability, jailbreak_probability) from the
+            model's softmax output (indices 1 and 2 of the 3-class logits).
+        """
         assert self._tokenizer is not None  # noqa: S101  # nosec B101
         assert self._model is not None  # noqa: S101  # nosec B101
         inputs = self._tokenizer(
@@ -187,7 +213,14 @@ class PromptGuardScanner(Scanner):
         return (probabilities[1].item(), probabilities[2].item())
 
     def _chunk_text(self, text: str, max_tokens: int = 512, overlap: int = 50) -> list[str]:
-        """Split text into overlapping chunks for the model's token limit."""
+        """Split text into overlapping chunks for the model's 512-token limit.
+
+        Args:
+            text: Input text to chunk.
+            max_tokens: Maximum tokens per chunk (matches model context window).
+            overlap: Token overlap between consecutive chunks to avoid splitting
+                an injection payload exactly at a boundary.
+        """
         assert self._tokenizer is not None  # noqa: S101  # nosec B101
         tokens = self._tokenizer.encode(text, add_special_tokens=False)
 

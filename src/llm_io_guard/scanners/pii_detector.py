@@ -1,4 +1,10 @@
-"""PII and secret detection scanner using Microsoft Presidio."""
+"""Tier 2 PII and secret detection scanner using Microsoft Presidio.
+
+Runs Presidio analysis in both Dutch (``nl``) and English (``en``) to support
+bilingual content common in Dutch business environments. Results from both
+languages are merged and deduplicated. Secrets (API keys, tokens) trigger BLOCK;
+PII (names, emails, BSN) triggers FLAG with optional anonymization on output.
+"""
 
 import asyncio
 
@@ -24,6 +30,8 @@ except ImportError:
 
 logger = structlog.get_logger()
 
+# Entity types that represent leaked secrets rather than personal data.
+# These always trigger BLOCK because secrets in LLM output are a critical risk.
 SECRET_ENTITY_TYPES = {
     "SECRET_API_KEY",
     "SECRET_TOKEN",
@@ -34,7 +42,13 @@ SECRET_ENTITY_TYPES = {
 if _HAS_PII_DEPS:
 
     class BsnRecognizer(PatternRecognizer):
-        """Dutch BSN (burgerservicenummer) recognizer with 11-proef validation."""
+        """Dutch BSN (burgerservicenummer) recognizer with 11-proef validation.
+
+        The BSN is a 9-digit Dutch citizen service number. The 11-proef (mod-11
+        check) validates the checksum: multiply each digit by its position weight
+        (9 down to 1, with the last digit subtracted), and verify the total is
+        divisible by 11 (and non-zero).
+        """
 
         def __init__(self) -> None:
             """Initialize with BSN digit patterns."""
@@ -58,10 +72,15 @@ if _HAS_PII_DEPS:
             )
 
         def validate_result(self, pattern_text: str) -> bool:
-            """Validate BSN using the 11-proef checksum."""
+            """Validate BSN using the 11-proef (mod-11) checksum.
+
+            Weights: positions 0-7 use (9-i), position 8 uses -1.
+            The total must be divisible by 11 and non-zero.
+            """
             digits = pattern_text.replace(".", "")
             if len(digits) != 9 or not digits.isdigit():
                 return False
+            # 11-proef: weight 9,8,7,...,2 for first 8 digits, -1 for the last
             total = sum((9 - i) * int(d) if i < 8 else -1 * int(d) for i, d in enumerate(digits))
             return total % 11 == 0 and total != 0
 
@@ -146,7 +165,12 @@ if _HAS_PII_DEPS:
 
 
 class PiiDetector(Scanner):
-    """PII and secret detection using Microsoft Presidio with Dutch support."""
+    """Tier 2 output scanner for PII and secret detection.
+
+    Uses Microsoft Presidio with spaCy NLP engines for both Dutch and English.
+    Includes custom recognizers for Dutch-specific PII (BSN, phone numbers,
+    postal codes) and common secret patterns (API keys, tokens, PEM keys).
+    """
 
     def __init__(
         self,
@@ -178,12 +202,12 @@ class PiiDetector(Scanner):
 
     @property
     def name(self) -> str:
-        """Return scanner name."""
+        """Scanner identifier: ``pii_detector``."""
         return "pii_detector"
 
     @property
     def tier(self) -> int:
-        """Return scanner tier."""
+        """Tier 2 — spaCy NLP + regex patterns, ~20-50ms."""
         return 2
 
     @property
@@ -221,7 +245,19 @@ class PiiDetector(Scanner):
             logger.info("pii_detector_initialized")
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
-        """Scan content for PII and secrets."""
+        """Scan content for PII and secrets.
+
+        Runs Presidio analysis in both Dutch and English, merges results, and
+        separates secrets (BLOCK) from PII (FLAG). On output direction,
+        high-confidence PII is anonymized via ``presidio-anonymizer``.
+
+        Args:
+            content: The text content to scan.
+            metadata: Optional dict; uses ``direction`` key (default ``"output"``).
+
+        Returns:
+            ScanResult with BLOCK for secrets, FLAG for PII, PASS otherwise.
+        """
         if self._analyzer is None or self._anonymizer is None:
             raise RuntimeError("PiiDetector not initialized. Call initialize() first.")
 
@@ -239,6 +275,8 @@ class PiiDetector(Scanner):
                 details={"error": str(e)},
             )
 
+        # Run both languages because Dutch business content often mixes languages
+        # (e.g. English API docs with Dutch names/addresses).
         all_results = self._merge_results(results_nl, results_en)
 
         secrets = [r for r in all_results if r.entity_type in SECRET_ENTITY_TYPES]
@@ -311,11 +349,25 @@ class PiiDetector(Scanner):
     def _merge_results(
         self, results_nl: list[RecognizerResult], results_en: list[RecognizerResult]
     ) -> list[RecognizerResult]:
-        """Merge and deduplicate results from multiple language analyses."""
+        """Merge and deduplicate results from multiple language analyses.
+
+        Results are sorted by score (descending) then start position. A result
+        is dropped if its span is fully contained within an already-accepted
+        higher-scoring result, preventing duplicate detections for the same
+        text region across languages.
+
+        Args:
+            results_nl: Recognizer results from Dutch analysis.
+            results_en: Recognizer results from English analysis.
+
+        Returns:
+            Deduplicated list of recognizer results, highest-scoring first.
+        """
         all_results = list(results_nl) + list(results_en)
         all_results.sort(key=lambda r: (-r.score, r.start))
         merged: list[RecognizerResult] = []
         for result in all_results:
+            # Skip if this span is fully contained within an existing higher-scored match
             if not any(
                 existing.start <= result.start and existing.end >= result.end for existing in merged
             ):

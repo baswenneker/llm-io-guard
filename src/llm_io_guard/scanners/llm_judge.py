@@ -1,4 +1,11 @@
-"""LLM Judge scanner using Claude Haiku 4.5 for content safety classification."""
+"""Tier 3 LLM Judge scanner using Claude Haiku 4.5 for content safety classification.
+
+This is the most expensive scanner in the pipeline and runs conditionally:
+InputFilter invokes it only when earlier tiers flagged content or source risk is
+high/unknown; OutputFilter always invokes it if registered. All errors (API,
+parse, unexpected) result in BLOCK (fail-closed) to prevent unsafe content from
+passing through when the judge is unavailable.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +17,9 @@ import structlog
 from ..models import Action, ScanResult
 from ..scanner import Scanner
 
+# Sentinel: initialized to base ``Exception`` so that ``except _AnthropicAPIError``
+# compiles even when the anthropic package is not installed. Overwritten with
+# ``anthropic.APIError`` when the import succeeds.
 _AnthropicAPIError: type[Exception] = Exception
 try:
     import anthropic
@@ -119,7 +129,13 @@ MAX_CONTENT_LENGTH = 10_000
 
 
 class LlmJudgeScanner(Scanner):
-    """Content safety classification using Claude Haiku 4.5."""
+    """Tier 3 content safety judge using Claude Haiku 4.5.
+
+    Sends content wrapped in ``<content_to_analyze>`` XML tags to prevent the
+    judge from following injected instructions. Uses few-shot examples in both
+    English and Dutch for calibration. Operates fail-closed: any error (API,
+    JSON parse, unexpected) returns BLOCK to avoid letting unsafe content through.
+    """
 
     def __init__(
         self,
@@ -153,12 +169,12 @@ class LlmJudgeScanner(Scanner):
 
     @property
     def name(self) -> str:
-        """Return scanner name."""
+        """Scanner identifier: ``llm_judge``."""
         return "llm_judge"
 
     @property
     def tier(self) -> int:
-        """Return scanner tier."""
+        """Tier 3 — LLM API call, ~200-500ms."""
         return 3
 
     async def ainitialize(self) -> None:
@@ -167,11 +183,21 @@ class LlmJudgeScanner(Scanner):
         logger.info("llm_judge_initialized")
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
-        """Scan content using Claude as a safety judge."""
+        """Scan content using Claude as a safety judge.
+
+        Args:
+            content: The text content to scan (truncated to ``MAX_CONTENT_LENGTH``).
+            metadata: Optional metadata (unused by this scanner).
+
+        Returns:
+            ScanResult with BLOCK/FLAG/PASS based on the judge's classification.
+            All error paths return BLOCK (fail-closed).
+        """
         if self._client is None:
             raise RuntimeError("LlmJudgeScanner not initialized. Call initialize() first.")
 
         if self._rate_limiter is not None:
+            # ~$0.003 per Haiku call (input + output tokens at typical lengths)
             allowed = await self._rate_limiter.aacquire(estimated_cost=0.003)
             if not allowed:
                 logger.warning("llm_judge_rate_limited")
@@ -186,7 +212,7 @@ class LlmJudgeScanner(Scanner):
         try:
             response = await self._client.messages.create(
                 model=self._model,
-                max_tokens=200,
+                max_tokens=200,  # JSON response is ~100 tokens; 200 gives headroom
                 system=SYSTEM_PROMPT,
                 messages=[
                     *FEW_SHOT_EXAMPLES,

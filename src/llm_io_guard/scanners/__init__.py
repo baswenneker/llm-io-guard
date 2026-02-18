@@ -1,9 +1,17 @@
-"""Scanner implementations for the content safety pipeline."""
+"""Scanner implementations for the content safety pipeline.
+
+Tier 1 scanners (lightweight, no external deps) are imported eagerly.
+Tier 2/3 scanners with heavy dependencies (torch, presidio, anthropic) are
+lazy-loaded via ``__getattr__`` so that ``import llm_io_guard.scanners``
+does not pull in ML libraries unless actually used.
+"""
 
 from .html_sanitizer import HtmlSanitizer
 from .invisible_text import InvisibleTextScanner
 from .xml_safe_parser import XmlSafeParser
 
+# All public scanner classes — includes lazy-loaded names so that
+# ``from llm_io_guard.scanners import PromptGuardScanner`` works.
 __all__ = [
     "HtmlSanitizer",
     "InvisibleTextScanner",
@@ -14,6 +22,7 @@ __all__ = [
     "XmlSafeParser",
 ]
 
+# Mapping of class name → relative module for lazy imports.
 _LAZY_IMPORTS: dict[str, str] = {
     "LlmJudgeScanner": ".llm_judge",
     "PiiDetector": ".pii_detector",
