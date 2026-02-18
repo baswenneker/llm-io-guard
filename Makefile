@@ -40,6 +40,14 @@ clean:  ## Clean temporary files
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
 
+ci:  ## Run the same checks as CI (lint, typecheck, test, benchmark)
+	uv run ruff check src/ tests/
+	uv run ruff format --check src/ tests/
+	uv run mypy src/
+	uv run pyright src/
+	uv run pytest -m "not slow and not benchmark"
+	uv run pytest -m benchmark
+
 dev:  ## Install and run development checks
 	$(MAKE) install
 	$(MAKE) fmt
