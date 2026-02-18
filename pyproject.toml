@@ -67,24 +67,6 @@ dev = [
     "build>=1.0.0",
     "twine>=5.0.0",
 ]
-notebooks = [
-    "jupyter>=1.0.0",
-    "jupyterlab>=4.0.0",
-    "ipykernel>=6.0.0",
-    "ipywidgets>=8.0.0",
-    "pandas>=2.0.0",
-    "numpy>=1.24.0",
-    "matplotlib>=3.7.0",
-    "seaborn>=0.12.0",
-    "plotly>=5.14.0",
-    "nbstripout>=0.6.0",
-]
-agents = [
-    "langchain>=1.0.0",
-    "langchain-core>=1.0.0",
-    "langchain-openai>=1.0.0",
-    "langgraph>=1.0.0",
-]
 
 [build-system]
 requires = ["hatchling"]
@@ -133,13 +115,6 @@ target-version = "py312"
 "tests/**/*.py" = ["S101"]
 "tests/helpers.py" = ["S101"]
 
-[tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = [
-    "fastapi.Depends",
-    "fastapi.params.Depends",
-    "fastapi.Query",
-    "fastapi.params.Query",
-]
 
 [tool.mypy]
 strict = false
