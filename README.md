@@ -29,6 +29,9 @@ pip install llm-io-guard[llm-judge]
 # With URL scanning (Google Safe Browsing)
 pip install llm-io-guard[url]
 
+# Combine extras as needed
+pip install llm-io-guard[ml,pii,url]
+
 # Everything
 pip install llm-io-guard[all]
 ```
@@ -178,6 +181,154 @@ For a deep dive into the pipeline internals, see [docs/architecture.md](docs/arc
 | `PiiDetector` | 2 | Microsoft Presidio with Dutch NER (BSN, phone, postal codes) + secret detection | LLM02, LLM05 |
 | `UrlScanner` | 2 | Google Safe Browsing API + homoglyph detection for phishing URLs | LLM01, LLM02 |
 | `LlmJudgeScanner` | 3 | Claude Haiku 4.5 content safety classifier for high-risk sources | LLM01, LLM07, LLM09 |
+
+### Scanner Details
+
+<details>
+<summary><strong>InvisibleTextScanner</strong> — strips zero-width and invisible Unicode characters</summary>
+
+| Property | Value |
+|----------|-------|
+| Tier | 1 |
+| Direction | input |
+| Install | `pip install llm-io-guard` (core) |
+
+Detects and removes invisible Unicode characters such as zero-width spaces, zero-width joiners, and other non-printable characters that can be used to hide prompt injections or obfuscate content. Flags content if invisible characters are found.
+
+Tier 1 scanners mutate content — the sanitized text is passed to downstream tiers via `details["sanitized_content"]`.
+
+**Configuration:**
+```python
+InvisibleTextScanner()  # No configuration needed
+```
+
+</details>
+
+<details>
+<summary><strong>HtmlSanitizer</strong> — strips HTML to plain text, removing scripts and dangerous elements</summary>
+
+| Property | Value |
+|----------|-------|
+| Tier | 1 |
+| Direction | input |
+| Install | `pip install llm-io-guard` (core) |
+
+Sanitizes HTML content to plain text, removing script tags, event handlers, and other dangerous HTML elements. Flags content if more than 80% of the HTML consisted of stripped elements, indicating potentially malicious content.
+
+**Configuration:**
+```python
+HtmlSanitizer()  # No configuration needed
+```
+
+</details>
+
+<details>
+<summary><strong>XmlSafeParser</strong> — prevents XXE (XML External Entity) attacks</summary>
+
+| Property | Value |
+|----------|-------|
+| Tier | 1 |
+| Direction | input |
+| Install | `pip install llm-io-guard` (core) |
+
+Validates and safely parses XML content using `defusedxml` to prevent XXE attacks, entity expansion bombs, and other XML-based exploits. Blocks content containing malicious XML constructs.
+
+**Configuration:**
+```python
+XmlSafeParser()  # No configuration needed
+```
+
+</details>
+
+<details>
+<summary><strong>PromptGuardScanner</strong> — ML-based prompt injection detection (Meta Prompt Guard 2)</summary>
+
+| Property | Value |
+|----------|-------|
+| Tier | 2 |
+| Direction | input |
+| Install | `pip install llm-io-guard[ml]` |
+
+Uses Meta's Prompt Guard 2 model (86M parameters) to detect prompt injection and jailbreak attempts. The model runs locally — no API calls needed. First use downloads the model (~2GB) to the cache directory.
+
+**Configuration:**
+```python
+PromptGuardScanner(
+    threshold_block=0.9,      # Minimum threat score to BLOCK
+    threshold_flag=0.7,       # Minimum threat score to FLAG
+    model_cache_dir=None,     # Model cache dir (default: ~/.cache/llm_io_guard)
+)
+```
+
+</details>
+
+<details>
+<summary><strong>PiiDetector</strong> — PII and secret detection (Presidio + Dutch NER)</summary>
+
+| Property | Value |
+|----------|-------|
+| Tier | 2 |
+| Direction | output |
+| Install | `pip install llm-io-guard[pii]` |
+
+Detects personally identifiable information using Microsoft Presidio with built-in Dutch NER support (BSN numbers, Dutch phone numbers, postal codes). Also detects secrets such as API keys, tokens, and passwords using pattern-based detection. Blocks content containing secrets; flags content containing PII.
+
+Requires spaCy models: `python -m spacy download nl_core_news_lg && python -m spacy download en_core_web_lg`
+
+**Configuration:**
+```python
+PiiDetector(
+    threshold_block=0.9,  # Minimum confidence to BLOCK (secret detection)
+    threshold_flag=0.7,   # Minimum confidence to FLAG (PII detection)
+)
+```
+
+</details>
+
+<details>
+<summary><strong>UrlScanner</strong> — URL safety via Google Safe Browsing + homoglyph detection</summary>
+
+| Property | Value |
+|----------|-------|
+| Tier | 2 |
+| Direction | input + output |
+| Install | `pip install llm-io-guard[url]` |
+
+Extracts URLs from content and checks them against the Google Safe Browsing API for known malicious URLs. Also detects homoglyph-based phishing domains (e.g., `gооgle.com` using Cyrillic "о" instead of Latin "o").
+
+Requires the `GOOGLE_SAFE_BROWSING_API_KEY` environment variable.
+
+**Configuration:**
+```python
+UrlScanner()  # No configuration needed
+```
+
+</details>
+
+<details>
+<summary><strong>LlmJudgeScanner</strong> — LLM-based content safety classifier (Claude Haiku 4.5)</summary>
+
+| Property | Value |
+|----------|-------|
+| Tier | 3 |
+| Direction | input + output |
+| Install | `pip install llm-io-guard[llm-judge]` |
+
+Uses Claude Haiku 4.5 as an LLM judge to classify content safety. Acts as a final catch-all for threats that deterministic and ML-based scanners may miss. For `InputFilter`, Tier 3 only runs when the source is high-risk or content was flagged by earlier tiers. For `OutputFilter`, it always runs when registered.
+
+Requires the `ANTHROPIC_API_KEY` environment variable.
+
+**Configuration:**
+```python
+LlmJudgeScanner(
+    threshold_block=0.8,      # Minimum confidence to BLOCK
+    threshold_flag=0.5,       # Minimum confidence to FLAG
+    model="claude-haiku-4-5-20251001",  # Anthropic model ID
+    rate_limiter=None,        # Optional RateLimiter for cost control
+)
+```
+
+</details>
 
 ## Configuration
 
