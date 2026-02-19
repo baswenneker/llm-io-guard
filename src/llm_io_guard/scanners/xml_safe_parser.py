@@ -22,20 +22,9 @@ class XmlSafeParser(Scanner):
     XML cannot exploit entity-expansion vulnerabilities.
     """
 
-    @property
-    def name(self) -> str:
-        """Scanner identifier: ``xml_safe_parser``."""
-        return "xml_safe_parser"
-
-    @property
-    def tier(self) -> int:
-        """Tier 1 — deterministic XML parsing, sub-millisecond."""
-        return 1
-
-    @property
-    def supported_directions(self) -> frozenset[str]:
-        """Only supports input direction."""
-        return frozenset({"input"})
+    name = "xml_safe_parser"
+    tier = 1
+    supported_directions = frozenset({"input"})
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         """Parse XML safely and block content with malicious entities.

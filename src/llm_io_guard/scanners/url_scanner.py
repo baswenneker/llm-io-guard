@@ -77,15 +77,8 @@ class UrlScanner(Scanner):
         """Initialize the URL scanner. Safe Browsing client is set up in ``ainitialize``."""
         self._safe_browsing = None
 
-    @property
-    def name(self) -> str:
-        """Scanner identifier: ``url_scanner``."""
-        return "url_scanner"
-
-    @property
-    def tier(self) -> int:
-        """Tier 2 — local regex + optional network API call."""
-        return 2
+    name = "url_scanner"
+    tier = 2
 
     async def ainitialize(self) -> None:
         """Initialize the Google Safe Browsing client if API key is available."""

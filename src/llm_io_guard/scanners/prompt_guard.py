@@ -75,20 +75,9 @@ class PromptGuardScanner(Scanner):
         self._tokenizer: PreTrainedTokenizerBase | None = None
         self._init_lock = asyncio.Lock()
 
-    @property
-    def name(self) -> str:
-        """Scanner identifier: ``prompt_guard``."""
-        return "prompt_guard"
-
-    @property
-    def tier(self) -> int:
-        """Tier 2 — ML inference, ~20-50ms on CPU."""
-        return 2
-
-    @property
-    def supported_directions(self) -> frozenset[str]:
-        """Only supports input direction."""
-        return frozenset({"input"})
+    name = "prompt_guard"
+    tier = 2
+    supported_directions = frozenset({"input"})
 
     async def ainitialize(self) -> None:
         """Load model and tokenizer (singleton pattern)."""

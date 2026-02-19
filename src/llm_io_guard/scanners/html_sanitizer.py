@@ -31,20 +31,9 @@ class HtmlSanitizer(Scanner):
     the HTML was mostly non-visible markup (potential hidden payload).
     """
 
-    @property
-    def name(self) -> str:
-        """Scanner identifier: ``html_sanitizer``."""
-        return "html_sanitizer"
-
-    @property
-    def tier(self) -> int:
-        """Tier 1 — deterministic, sub-millisecond."""
-        return 1
-
-    @property
-    def supported_directions(self) -> frozenset[str]:
-        """Only supports input direction."""
-        return frozenset({"input"})
+    name = "html_sanitizer"
+    tier = 1
+    supported_directions = frozenset({"input"})
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         """Strip HTML tags and flag content with excessive markup.

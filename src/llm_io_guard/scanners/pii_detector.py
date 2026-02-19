@@ -200,20 +200,9 @@ class PiiDetector(Scanner):
         self._anonymizer: AnonymizerEngine | None = None
         self._init_lock = asyncio.Lock()
 
-    @property
-    def name(self) -> str:
-        """Scanner identifier: ``pii_detector``."""
-        return "pii_detector"
-
-    @property
-    def tier(self) -> int:
-        """Tier 2 — spaCy NLP + regex patterns, ~20-50ms."""
-        return 2
-
-    @property
-    def supported_directions(self) -> frozenset[str]:
-        """Only supports output direction."""
-        return frozenset({"output"})
+    name = "pii_detector"
+    tier = 2
+    supported_directions = frozenset({"output"})
 
     async def ainitialize(self) -> None:
         """Initialize Presidio with Dutch spaCy model and custom recognizers."""

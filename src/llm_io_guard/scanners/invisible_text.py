@@ -39,20 +39,9 @@ class InvisibleTextScanner(Scanner):
     attack, with confidence scaling linearly up to 1.0 at 50 characters.
     """
 
-    @property
-    def name(self) -> str:
-        """Scanner identifier: ``invisible_text``."""
-        return "invisible_text"
-
-    @property
-    def tier(self) -> int:
-        """Tier 1 — deterministic regex, sub-millisecond."""
-        return 1
-
-    @property
-    def supported_directions(self) -> frozenset[str]:
-        """Only supports input direction."""
-        return frozenset({"input"})
+    name = "invisible_text"
+    tier = 1
+    supported_directions = frozenset({"input"})
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         """Strip invisible characters and flag suspicious amounts.

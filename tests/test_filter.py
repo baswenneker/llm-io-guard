@@ -134,13 +134,8 @@ class TestInputFilter:
         class CancelScanner(Scanner):
             """Scanner that raises CancelledError."""
 
-            @property
-            def name(self) -> str:
-                return "cancel_scanner"
-
-            @property
-            def tier(self) -> int:
-                return 2
+            name = "cancel_scanner"
+            tier = 2
 
             async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
                 raise asyncio.CancelledError()

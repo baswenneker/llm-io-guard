@@ -12,13 +12,8 @@ from llm_io_guard.scanner import Scanner
 class _PassScanner(Scanner):
     """Minimal scanner for sync tests."""
 
-    @property
-    def name(self) -> str:
-        return "sync_pass"
-
-    @property
-    def tier(self) -> int:
-        return 2
+    name = "sync_pass"
+    tier = 2
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         return ScanResult(
@@ -32,13 +27,8 @@ class _PassScanner(Scanner):
 class _BlockScanner(Scanner):
     """Minimal blocking scanner for sync tests."""
 
-    @property
-    def name(self) -> str:
-        return "sync_block"
-
-    @property
-    def tier(self) -> int:
-        return 2
+    name = "sync_block"
+    tier = 2
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         return ScanResult(

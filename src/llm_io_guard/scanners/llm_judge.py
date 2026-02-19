@@ -167,15 +167,8 @@ class LLMJudgeScanner(Scanner):
         self._client: anthropic.AsyncAnthropic | None = None
         self._rate_limiter = rate_limiter
 
-    @property
-    def name(self) -> str:
-        """Scanner identifier: ``llm_judge``."""
-        return "llm_judge"
-
-    @property
-    def tier(self) -> int:
-        """Tier 3 — LLM API call, ~200-500ms."""
-        return 3
+    name = "llm_judge"
+    tier = 3
 
     async def ainitialize(self) -> None:
         """Initialize the Anthropic client."""

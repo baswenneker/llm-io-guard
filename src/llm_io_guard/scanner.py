@@ -14,25 +14,33 @@ from .utils.sync import run_sync
 class Scanner(ABC):
     """Abstract base class for all content scanners.
 
-    Subclasses must implement ``name``, ``tier``, and ``ascan()``.
-    Optionally override ``supported_directions`` to restrict to ``"input"``
-    or ``"output"`` only, and ``ainitialize()`` for lazy resource loading
-    (models, API clients, etc.).
+    Subclasses must define ``name``, ``tier`` as class attributes and implement
+    ``ascan()``.  Optionally override ``supported_directions`` to restrict to
+    ``"input"`` or ``"output"`` only, and ``ainitialize()`` for lazy resource
+    loading (models, API clients, etc.).
 
     Sync wrappers ``scan()`` and ``initialize()`` are provided automatically.
     """
 
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Unique identifier for this scanner."""
-        ...
+    name: str
+    """Unique identifier for this scanner."""
 
-    @property
-    @abstractmethod
-    def tier(self) -> int:
-        """Execution tier (1=fast deterministic, 2=ML/pattern, 3=LLM judge)."""
-        ...
+    tier: int
+    """Execution tier (1=fast deterministic, 2=ML/pattern, 3=LLM judge)."""
+
+    supported_directions: frozenset[str] = frozenset({"input", "output"})
+    """Directions this scanner supports. Override to restrict to a single direction."""
+
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        """Enforce that concrete scanners define ``name`` and ``tier``."""
+        super().__init_subclass__(**kwargs)
+        if getattr(cls, "__abstractmethods__", frozenset()):
+            return  # abstract subclass, skip check
+        for attr in ("name", "tier"):
+            if not hasattr(cls, attr):
+                raise TypeError(
+                    f"Concrete scanner {cls.__name__} must define class attribute '{attr}'"
+                )
 
     @abstractmethod
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
@@ -60,15 +68,6 @@ class Scanner(ABC):
             ScanResult with action, confidence, and description.
         """
         return run_sync(self.ascan(content, metadata))
-
-    @property
-    def supported_directions(self) -> frozenset[str]:
-        """Directions this scanner supports.
-
-        Returns ``{"input", "output"}`` by default. Override in subclasses to
-        restrict to a single direction.
-        """
-        return frozenset({"input", "output"})
 
     async def ainitialize(self) -> None:  # noqa: B027
         """Optional async initialization hook for loading models, API clients, etc.

@@ -7,16 +7,11 @@ from llm_io_guard.scanner import Scanner
 class PassScanner(Scanner):
     """Scanner that always passes."""
 
-    @property
-    def name(self) -> str:
-        return "pass_scanner"
-
-    @property
-    def tier(self) -> int:
-        return self._tier
+    name = "pass_scanner"
+    tier = 2
 
     def __init__(self, tier: int = 2) -> None:
-        self._tier = tier
+        self.tier = tier
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         return ScanResult(
@@ -30,16 +25,11 @@ class PassScanner(Scanner):
 class BlockScanner(Scanner):
     """Scanner that always blocks."""
 
-    @property
-    def name(self) -> str:
-        return "block_scanner"
-
-    @property
-    def tier(self) -> int:
-        return self._tier
+    name = "block_scanner"
+    tier = 2
 
     def __init__(self, tier: int = 2) -> None:
-        self._tier = tier
+        self.tier = tier
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         return ScanResult(
@@ -53,16 +43,11 @@ class BlockScanner(Scanner):
 class FlagScanner(Scanner):
     """Scanner that always flags."""
 
-    @property
-    def name(self) -> str:
-        return "flag_scanner"
-
-    @property
-    def tier(self) -> int:
-        return self._tier
+    name = "flag_scanner"
+    tier = 2
 
     def __init__(self, tier: int = 2) -> None:
-        self._tier = tier
+        self.tier = tier
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         return ScanResult(
@@ -76,17 +61,12 @@ class FlagScanner(Scanner):
 class ErrorScanner(Scanner):
     """Scanner that raises an exception on ascan() for testing error handling."""
 
+    name = "error_scanner"
+    tier = 2
+
     def __init__(self, tier: int = 2, error: Exception | None = None):
-        self._tier = tier
+        self.tier = tier
         self._error = error or RuntimeError("Test scanner error")
-
-    @property
-    def name(self) -> str:
-        return "error_scanner"
-
-    @property
-    def tier(self) -> int:
-        return self._tier
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         raise self._error
@@ -95,13 +75,8 @@ class ErrorScanner(Scanner):
 class SanitizingScanner(Scanner):
     """Tier 1 scanner that sanitizes content."""
 
-    @property
-    def name(self) -> str:
-        return "sanitizing_scanner"
-
-    @property
-    def tier(self) -> int:
-        return 1
+    name = "sanitizing_scanner"
+    tier = 1
 
     async def ascan(self, content: str, metadata: dict | None = None) -> ScanResult:
         sanitized = content.replace("<script>", "").replace("</script>", "")
