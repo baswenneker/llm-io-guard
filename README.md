@@ -179,7 +179,7 @@ For a deep dive into the pipeline internals, see [docs/architecture.md](docs/arc
 | `PromptGuardScanner` | 2 | Meta Prompt Guard 2 (86M params) for prompt injection detection | LLM01 |
 | `PiiDetector` | 2 | Microsoft Presidio with Dutch NER (BSN, phone, postal codes) + secret detection | LLM02, LLM05 |
 | `UrlScanner` | 2 | Google Safe Browsing API + homoglyph detection for phishing URLs | LLM01, LLM02 |
-| `LlmJudgeScanner` | 3 | Claude Haiku 4.5 content safety classifier for high-risk sources | LLM01, LLM07, LLM09 |
+| `LLMJudgeScanner` | 3 | Claude Haiku 4.5 content safety classifier for high-risk sources | LLM01, LLM07, LLM09 |
 
 ### Scanner Details
 
@@ -305,7 +305,7 @@ UrlScanner()  # No configuration needed
 </details>
 
 <details>
-<summary><strong>LlmJudgeScanner</strong> — LLM-based content safety classifier (Claude Haiku 4.5)</summary>
+<summary><strong>LLMJudgeScanner</strong> — LLM-based content safety classifier (Claude Haiku 4.5)</summary>
 
 | Property | Value |
 |----------|-------|
@@ -319,7 +319,7 @@ Requires the `ANTHROPIC_API_KEY` environment variable.
 
 **Configuration:**
 ```python
-LlmJudgeScanner(
+LLMJudgeScanner(
     threshold_block=0.8,      # Minimum confidence to BLOCK
     threshold_flag=0.5,       # Minimum confidence to FLAG
     model="claude-haiku-4-5-20251001",  # Anthropic model ID
@@ -336,11 +336,11 @@ Scanners are configured via constructor keyword arguments:
 ```python
 from llm_io_guard.scanners.prompt_guard import PromptGuardScanner
 from llm_io_guard.scanners.pii_detector import PiiDetector
-from llm_io_guard.scanners.llm_judge import LlmJudgeScanner
+from llm_io_guard.scanners.llm_judge import LLMJudgeScanner
 
 PromptGuardScanner(threshold_block=0.9, threshold_flag=0.7)
 PiiDetector(threshold_block=0.9, threshold_flag=0.7)
-LlmJudgeScanner(threshold_block=0.8, threshold_flag=0.5, model="claude-haiku-4-5")
+LLMJudgeScanner(threshold_block=0.8, threshold_flag=0.5, model="claude-haiku-4-5")
 ```
   
 ### Environment Variables

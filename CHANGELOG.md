@@ -18,7 +18,7 @@
 - [Changed] Cache lazy imports in scanners `__getattr__` for better performance
 
 **Commit: ab80b46**
-- [Changed] Restore type annotations in `LlmJudgeScanner` via `TYPE_CHECKING`
+- [Changed] Restore type annotations in `LLMJudgeScanner` via `TYPE_CHECKING`
 
 **Commit: 240a952**
 - [Added] Prepare for PyPI publication with optional dependency groups (`ml`, `pii`, `url`, `llm`)
@@ -53,7 +53,7 @@
 - Core pipeline orchestrator with 3-tier architecture
 - Tier 1 scanners: InvisibleTextScanner, HtmlSanitizer, XmlSafeParser
 - Tier 2 scanners: PromptGuardScanner (Meta Prompt Guard 2), PiiDetector (Presidio), UrlScanner
-- Tier 3 scanner: LlmJudgeScanner (Claude Haiku 4.5)
+- Tier 3 scanner: LLMJudgeScanner (Claude Haiku 4.5)
 - Agent integration layer with safe_fetch_email() and safe_fetch_webpage()
 - Action validation with human-in-the-loop support
 - Rate limiter with cost controls

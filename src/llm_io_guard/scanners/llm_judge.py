@@ -128,7 +128,7 @@ FEW_SHOT_EXAMPLES: list[MessageParam] = [
 MAX_CONTENT_LENGTH = 10_000
 
 
-class LlmJudgeScanner(Scanner):
+class LLMJudgeScanner(Scanner):
     """Tier 3 content safety judge using Claude Haiku 4.5.
 
     Sends content wrapped in ``<content_to_analyze>`` XML tags to prevent the
@@ -158,7 +158,7 @@ class LlmJudgeScanner(Scanner):
         """
         if not _HAS_ANTHROPIC:
             raise ImportError(
-                "LlmJudgeScanner requires the anthropic package. "
+                "LLMJudgeScanner requires the anthropic package. "
                 "Install with: pip install llm-io-guard[llm-judge]"
             )
         self._threshold_block = threshold_block
@@ -194,7 +194,7 @@ class LlmJudgeScanner(Scanner):
             All error paths return BLOCK (fail-closed).
         """
         if self._client is None:
-            raise RuntimeError("LlmJudgeScanner not initialized. Call initialize() first.")
+            raise RuntimeError("LLMJudgeScanner not initialized. Call initialize() first.")
 
         if self._rate_limiter is not None:
             # ~$0.003 per Haiku call (input + output tokens at typical lengths)

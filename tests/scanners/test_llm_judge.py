@@ -14,13 +14,13 @@ from llm_io_guard.models import Action
 from llm_io_guard.scanners.llm_judge import (
     FEW_SHOT_EXAMPLES,
     MAX_CONTENT_LENGTH,
-    LlmJudgeScanner,
+    LLMJudgeScanner,
 )
 
 
 @pytest.fixture
 def scanner():
-    return LlmJudgeScanner(threshold_block=0.9, threshold_flag=0.7)
+    return LLMJudgeScanner(threshold_block=0.9, threshold_flag=0.7)
 
 
 @pytest.fixture
@@ -290,9 +290,9 @@ async def test_scanner_properties(scanner):
 
 class TestImportGuard:
     def test_raises_without_anthropic(self):
-        """LlmJudgeScanner() raises ImportError when anthropic is missing."""
+        """LLMJudgeScanner() raises ImportError when anthropic is missing."""
         with (
             patch("llm_io_guard.scanners.llm_judge._HAS_ANTHROPIC", False),
             pytest.raises(ImportError, match="pip install llm-io-guard\\[llm-judge\\]"),
         ):
-            LlmJudgeScanner()
+            LLMJudgeScanner()

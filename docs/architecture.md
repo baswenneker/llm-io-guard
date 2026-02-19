@@ -117,7 +117,7 @@ Built-in Tier 3 scanner:
 
 | Scanner | What it does |
 |---------|-------------|
-| `LlmJudgeScanner` | Claude Haiku 4.5 content safety classifier |
+| `LLMJudgeScanner` | Claude Haiku 4.5 content safety classifier |
 
 ## InputFilter vs OutputFilter
 

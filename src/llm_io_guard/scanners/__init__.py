@@ -15,7 +15,7 @@ from .xml_safe_parser import XmlSafeParser
 __all__ = [
     "HtmlSanitizer",
     "InvisibleTextScanner",
-    "LlmJudgeScanner",
+    "LLMJudgeScanner",
     "PiiDetector",
     "PromptGuardScanner",
     "UrlScanner",
@@ -24,7 +24,7 @@ __all__ = [
 
 # Mapping of class name → relative module for lazy imports.
 _LAZY_IMPORTS: dict[str, str] = {
-    "LlmJudgeScanner": ".llm_judge",
+    "LLMJudgeScanner": ".llm_judge",
     "PiiDetector": ".pii_detector",
     "PromptGuardScanner": ".prompt_guard",
     "UrlScanner": ".url_scanner",

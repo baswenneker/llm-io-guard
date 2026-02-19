@@ -41,7 +41,7 @@ Tier 2 (< 50ms) → Parallel ML/pattern detection (asyncio.gather)
                    PromptGuardScanner, PiiDetector, UrlScanner
 
 Tier 3 (< 500ms)→ Conditional LLM judge
-                   LlmJudgeScanner (Claude Haiku)
+                   LLMJudgeScanner (Claude Haiku)
 ```
 
 Usage (sync):
