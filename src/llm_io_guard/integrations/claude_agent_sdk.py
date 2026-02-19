@@ -42,9 +42,8 @@ from __future__ import annotations
 
 import json
 import warnings
-from collections.abc import Callable, Coroutine
 from functools import wraps
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 
@@ -52,16 +51,22 @@ from ..filter import InputFilter
 from ..models import Action
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
+
+    from claude_agent_sdk.types import HookCallback
+
     from ..filter import BaseFilter
     from ..scanner import Scanner
 
 logger = structlog.get_logger()
 
-HookCallback = Callable[
-    [dict[str, Any], str, dict[str, Any]],
-    Coroutine[Any, Any, dict[str, Any]],
-]
-"""Async hook callback signature expected by the Claude Agent SDK."""
+"""Async hook callback signature expected by the Claude Agent SDK.
+
+The ``HookCallback`` type is re-exported from ``claude_agent_sdk.types``
+at type-checking time so that factories return the exact same type the SDK
+expects.  At runtime the type is not needed — the functions are plain
+``async def`` callables.
+"""
 
 _DEFAULT_MAX_CONTENT_LENGTH = 50_000
 
@@ -213,7 +218,7 @@ def pre_tool_use_hook(
     @_fail_open("pre_tool_use_hook_error")
     async def hook(
         input_data: dict[str, Any],
-        _tool_use_id: str,
+        _tool_use_id: str | None,
         _context: dict[str, Any],
     ) -> dict[str, Any]:
         """Filter input field and deny tool call if blocked."""
@@ -245,7 +250,7 @@ def pre_tool_use_hook(
 
         return {}
 
-    return hook
+    return cast("HookCallback", hook)
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +288,7 @@ def post_tool_use_hook(
     @_fail_open("post_tool_use_hook_error")
     async def hook(
         input_data: dict[str, Any],
-        _tool_use_id: str,
+        _tool_use_id: str | None,
         _context: dict[str, Any],
     ) -> dict[str, Any]:
         """Filter tool response content and inject warnings."""
@@ -305,7 +310,7 @@ def post_tool_use_hook(
 
         return {}
 
-    return hook
+    return cast("HookCallback", hook)
 
 
 # ---------------------------------------------------------------------------
