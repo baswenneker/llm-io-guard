@@ -10,7 +10,7 @@ Two generic hooks cover all use cases:
 - **pre_tool_use_hook**: Filters an input field (URL, prompt, …) through a
   ``BaseFilter`` before the tool executes.
 - **post_tool_use_hook**: Filters the tool response through a ``BaseFilter``
-  after execution, with an optional *guard* callable to skip irrelevant
+  after execution, with an optional *only_skills* list to skip irrelevant
   invocations.
 
 Example usage::
@@ -18,7 +18,6 @@ Example usage::
     from llm_io_guard.integrations.claude_agent_sdk import (
         post_tool_use_hook,
         pre_tool_use_hook,
-        skill_guard,
     )
 
     hooks = {
@@ -32,7 +31,7 @@ Example usage::
                 post_tool_use_hook(webfetch_filter),
             ]),
             HookMatcher(matcher="Skill", hooks=[
-                post_tool_use_hook(email_filter, guard=skill_guard({"read-email"})),
+                post_tool_use_hook(email_filter, only_skills=["read-email"], source_risk="high"),
             ]),
         ],
     }
@@ -41,13 +40,11 @@ Example usage::
 from __future__ import annotations
 
 import json
-import warnings
 from functools import wraps
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import structlog
 
-from ..filter import InputFilter
 from ..models import Action
 
 if TYPE_CHECKING:
@@ -56,7 +53,6 @@ if TYPE_CHECKING:
     from claude_agent_sdk.types import HookCallback
 
     from ..filter import BaseFilter
-    from ..scanner import Scanner
 
 logger = structlog.get_logger()
 
@@ -159,11 +155,11 @@ def _extract_tool_content(input_data: dict[str, Any], max_length: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Guard helpers
+# Guard helpers (private)
 # ---------------------------------------------------------------------------
 
 
-def skill_guard(
+def _skill_guard(
     skills_to_scan: set[str],
     *,
     skill_name_path: str = "tool_input.skill",
@@ -195,7 +191,7 @@ def pre_tool_use_hook(
     content_filter: BaseFilter,
     *,
     input_path: str = "tool_input.url",
-    metadata: dict[str, Any] | None = None,
+    source_risk: Literal["low", "high", "unknown"] = "low",
 ) -> HookCallback:
     """Build a PreToolUse hook that filters an input field before tool execution.
 
@@ -209,11 +205,14 @@ def pre_tool_use_hook(
     Args:
         content_filter: A ``BaseFilter`` instance (e.g. ``InputFilter``).
         input_path: Dot-separated path to the field inside ``input_data``.
-        metadata: Extra metadata forwarded to ``afilter()``.
+        source_risk: Risk level of the content source, forwarded to
+            ``afilter()`` as ``{"source_risk": source_risk}``.  Use ``"high"``
+            for untrusted external content to trigger Tier 3 scanning.
 
     Returns:
         An async hook callback.
     """
+    metadata = {"source_risk": source_risk}
 
     @_fail_open("pre_tool_use_hook_error")
     async def hook(
@@ -261,29 +260,33 @@ def pre_tool_use_hook(
 def post_tool_use_hook(
     content_filter: BaseFilter,
     *,
-    guard: Callable[[dict[str, Any]], bool] | None = None,
+    only_skills: list[str] | set[str] | None = None,
     max_content_length: int = _DEFAULT_MAX_CONTENT_LENGTH,
-    metadata: dict[str, Any] | None = None,
+    source_risk: Literal["low", "high", "unknown"] = "low",
 ) -> HookCallback:
     """Build a PostToolUse hook that filters tool response content.
 
     Extracts text from ``input_data["tool_response"]``, runs it through the
     filter, and injects a ``systemMessage`` if content is flagged or blocked.
 
-    An optional *guard* callable can be supplied to skip invocations that
-    don't match (e.g. only scan specific skills).  When the guard returns
-    ``False`` the hook returns ``{}`` immediately.
+    When *only_skills* is provided the hook only runs the filter for skill
+    invocations whose name (``tool_input.skill``) appears in the list.  All
+    other invocations return ``{}`` immediately without scanning.
 
     Args:
         content_filter: A ``BaseFilter`` instance (e.g. ``InputFilter``).
-        guard: Optional callable ``(input_data) -> bool``.  When provided,
-            the hook only runs the filter if the guard returns ``True``.
+        only_skills: Optional list or set of skill names to scan.  When
+            provided, invocations for other skills are skipped entirely.
         max_content_length: Truncate content to this length before scanning.
-        metadata: Extra metadata forwarded to ``afilter()``.
+        source_risk: Risk level of the content source, forwarded to
+            ``afilter()`` as ``{"source_risk": source_risk}``.  Use ``"high"``
+            for untrusted external content to trigger Tier 3 scanning.
 
     Returns:
         An async hook callback.
     """
+    guard = _skill_guard(set(only_skills)) if only_skills is not None else None
+    metadata = {"source_risk": source_risk}
 
     @_fail_open("post_tool_use_hook_error")
     async def hook(
@@ -311,102 +314,3 @@ def post_tool_use_hook(
         return {}
 
     return cast("HookCallback", hook)
-
-
-# ---------------------------------------------------------------------------
-# Deprecated aliases
-# ---------------------------------------------------------------------------
-
-
-def pre_tool_use_url_hook(
-    scanner: Scanner,
-    *,
-    url_path: str = "tool_input.url",
-) -> HookCallback:
-    """Build a PreToolUse hook that scans a URL before the tool executes.
-
-    .. deprecated::
-        Use :func:`pre_tool_use_hook` instead.
-
-    Args:
-        scanner: A ``Scanner`` instance (e.g. ``UrlScanner``).
-        url_path: Dot-separated path to the URL inside ``input_data``.
-
-    Returns:
-        An async hook callback.
-    """
-    warnings.warn(
-        "pre_tool_use_url_hook is deprecated, use pre_tool_use_hook instead",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    f = InputFilter()
-    f.add(scanner)
-    return pre_tool_use_hook(f, input_path=url_path)
-
-
-def post_tool_use_filter_hook(
-    content_filter: BaseFilter,
-    *,
-    max_content_length: int = _DEFAULT_MAX_CONTENT_LENGTH,
-    metadata: dict[str, Any] | None = None,
-) -> HookCallback:
-    """Build a PostToolUse hook that filters tool response content.
-
-    .. deprecated::
-        Use :func:`post_tool_use_hook` instead.
-
-    Args:
-        content_filter: A ``BaseFilter`` instance (e.g. ``InputFilter``).
-        max_content_length: Truncate content to this length before scanning.
-        metadata: Extra metadata forwarded to ``afilter()``.
-
-    Returns:
-        An async hook callback.
-    """
-    warnings.warn(
-        "post_tool_use_filter_hook is deprecated, use post_tool_use_hook instead",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return post_tool_use_hook(
-        content_filter,
-        max_content_length=max_content_length,
-        metadata=metadata,
-    )
-
-
-def post_tool_use_skill_hook(
-    content_filter: BaseFilter,
-    skills_to_scan: set[str],
-    *,
-    max_content_length: int = _DEFAULT_MAX_CONTENT_LENGTH,
-    metadata: dict[str, Any] | None = None,
-    skill_name_path: str = "tool_input.skill",
-) -> HookCallback:
-    """Build a PostToolUse hook that selectively scans skill responses.
-
-    .. deprecated::
-        Use ``post_tool_use_hook(filter, guard=skill_guard(...))`` instead.
-
-    Args:
-        content_filter: A ``BaseFilter`` instance (e.g. ``InputFilter``).
-        skills_to_scan: Set of skill names that return untrusted content.
-        max_content_length: Truncate content to this length before scanning.
-        metadata: Extra metadata forwarded to ``afilter()``.
-        skill_name_path: Dot-separated path to the skill name in ``input_data``.
-
-    Returns:
-        An async hook callback.
-    """
-    warnings.warn(
-        "post_tool_use_skill_hook is deprecated, use post_tool_use_hook with skill_guard instead",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return post_tool_use_hook(
-        content_filter,
-        guard=skill_guard(skills_to_scan, skill_name_path=skill_name_path),
-        max_content_length=max_content_length,
-        metadata=metadata,
-    )
